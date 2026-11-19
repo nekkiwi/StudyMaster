@@ -110,8 +110,8 @@ end-of-day check-in. Then the plan is rebuilt from the next day, and
 ## Roadmap
 1. ✅ `packages/core`: effort model with Anki, planner with reviews, buffers
    and escalation, check-in, plan diff, validation, tests
-2. Web app (local-only first): setup wizard, Today view with check-in card,
-   calendar with buffer blocks, progress and exam countdowns
+2. ✅ Web app (local-only first): setup wizard, Today view with check-in card,
+   calendar with buffer blocks, progress and exam countdowns, approval banner
 3. Backend: login, sync, cron + Web Push check-ins
 4. Built-in assistant (limits + spend cap)
 5. MCP connector + "Connect to Claude" page

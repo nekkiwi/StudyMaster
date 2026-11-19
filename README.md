@@ -9,15 +9,23 @@ See [docs/DESIGN.md](docs/DESIGN.md) for how it works.
 ## Status
 
 - `packages/core` – the planning engine (done, tested)
-- Web app, backend, assistant and MCP connector – next
+- `apps/web` – the web app: setup wizard, Today with check-in, calendar,
+  subjects, settings. Works offline and can be installed on phone and desktop.
+  Data is stored on the device.
+- Backend (sync + push notifications), assistant and MCP connector – next
 
 ## Development
 
 ```bash
 npm install
-npm test          # run the planner tests
+npm run dev       # web app at http://localhost:5173
+npm test          # planner + app tests
 npm run typecheck
+npm run build     # production build in apps/web/dist
 ```
+
+Tip: on the welcome screen, "Try with example data" fills in three subjects
+so you can look around right away.
 
 ## Quick example
 

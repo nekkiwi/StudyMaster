@@ -1,9 +1,17 @@
 {
   "name": "studymaster",
   "private": true,
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
   "scripts": {
+    "dev": "npm run dev -w @studymaster/web",
+    "build": "npm run build -w @studymaster/web",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present"
+  },
+  "devDependencies": {
+    "vite": "^6.4.6"
   }
 }

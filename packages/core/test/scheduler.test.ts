@@ -220,7 +220,7 @@ describe("planWithEscalation", () => {
     expect(result.level).toBe("shortenExamBuffer");
     expect(result.examBufferDays).toBe(1);
     expect(result.usedBufferSlots).toEqual([]);
-    expect(result.warnings[0]).toMatch(/1 day\(s\) before exams instead of 2/);
+    expect(result.warnings[0]).toMatch(/ends 1 day before exams instead of 2/);
   });
 });
 
@@ -278,5 +278,22 @@ describe("validateState", () => {
     expect(errors).toMatch(/unknown subject/);
     expect(errors).toMatch(/needs pages or slides/);
     expect(errors).toMatch(/Max sessions/);
+  });
+});
+
+describe("approval limit", () => {
+  it("stops at the level the user has approved", () => {
+    const st = state([subject("bio", "2026-11-30")], chunks("bio", 6), {
+      sessionMinutes: 110,
+      preferredSessionsPerDay: 1,
+      maxSessionsPerDay: 2,
+      examBufferDays: 0,
+    });
+    const full = planWithEscalation(st, MON);
+    const capped = planWithEscalation(st, MON, "normal");
+    expect(full.level).toBe("useWeeklyBuffer");
+    expect(capped.level).toBe("infeasible");
+    expect(capped.usedBufferSlots).toEqual([]);
+    expect(capped.plan.subjects[0]!.deficitMinutes).toBe(100);
   });
 });

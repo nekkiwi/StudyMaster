@@ -361,19 +361,22 @@ interface Step {
   options: PlanOptions;
 }
 
-/**
- * Tries to fit everything, going one step further each time:
- *
- * 1. normal            – preferred sessions only (applied automatically)
- * 2. shortenExamBuffer – main study may run one day closer to the exam
- * 3. useWeeklyBuffer   – catch up in the weekly buffer half-day
- * 4. extraSessions     – sessions above preferred, up to max per day
- *
- * Everything after step 1 needs the user's approval. If nothing fits,
- * the result is "infeasible" with the per-subject deficit.
- */
-export function planWithEscalation(state: StudyState, from: ISODate): PlanResult {
-  const s = state.settings;
+/** Escalation levels from mildest to strongest. */
+export const LEVEL_ORDER: readonly EscalationLevel[] = [
+  "normal",
+  "shortenExamBuffer",
+  "useWeeklyBuffer",
+  "extraSessions",
+  "infeasible",
+];
+
+export function levelRank(level: EscalationLevel): number {
+  return LEVEL_ORDER.indexOf(level);
+}
+
+/** The planner options used at each escalation level (skips levels that don't apply). */
+export function escalationSteps(settings: StudyState["settings"]): Step[] {
+  const s = settings;
   const shortened = Math.max(0, s.examBufferDays - 1);
   const steps: Step[] = [
     {
@@ -403,7 +406,31 @@ export function planWithEscalation(state: StudyState, from: ISODate): PlanResult
       },
     });
   }
+  return steps;
+}
 
+/**
+ * Tries to fit everything, going one step further each time:
+ *
+ * 1. normal            – preferred sessions only (applied automatically)
+ * 2. shortenExamBuffer – main study may run one day closer to the exam
+ * 3. useWeeklyBuffer   – catch up in the weekly buffer half-day
+ * 4. extraSessions     – sessions above preferred, up to max per day
+ *
+ * Everything after step 1 needs the user's approval. If nothing fits,
+ * the result is "infeasible" with the per-subject deficit.
+ *
+ * `maxLevel` stops the ladder early: use it to build the plan the user has
+ * agreed to so far, while a stronger step waits for approval.
+ */
+export function planWithEscalation(
+  state: StudyState,
+  from: ISODate,
+  maxLevel: EscalationLevel = "infeasible",
+): PlanResult {
+  const steps = escalationSteps(state.settings).filter(
+    (x) => levelRank(x.level) <= levelRank(maxLevel),
+  );
   let plan: Plan | undefined;
   let step: Step = steps[0]!;
   for (step of steps) {
@@ -424,20 +451,17 @@ function toResult(
   const usedExtraSlots = plan.sessions.filter((x) => x.kind === "extra").map(toSlot);
   const warnings: string[] = [];
 
+  const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
   if (options.examBufferDays < state.settings.examBufferDays) {
     warnings.push(
-      `Main study now ends ${options.examBufferDays} day(s) before exams instead of ${state.settings.examBufferDays}.`,
+      `Main study ends ${plural(options.examBufferDays, "day")} before exams instead of ${state.settings.examBufferDays}.`,
     );
   }
   if (usedBufferSlots.length > 0) {
-    warnings.push(
-      `Uses ${usedBufferSlots.length} weekly buffer slot(s) to catch up: ${listDates(usedBufferSlots)}.`,
-    );
+    warnings.push(`Uses ${plural(usedBufferSlots.length, "weekly buffer slot")} to catch up.`);
   }
   if (usedExtraSlots.length > 0) {
-    warnings.push(
-      `Needs ${usedExtraSlots.length} extra session(s) above your preferred number: ${listDates(usedExtraSlots)}.`,
-    );
+    warnings.push(`Needs ${plural(usedExtraSlots.length, "extra session")} above your preferred number.`);
   }
   for (const status of plan.subjects) {
     if (status.deficitMinutes > 0) {
@@ -464,6 +488,3 @@ function toSlot(x: Slot): Slot {
   return { date: x.date, slot: x.slot, kind: x.kind };
 }
 
-function listDates(slots: Slot[]): string {
-  return [...new Set(slots.map((x) => x.date))].join(", ");
-}
