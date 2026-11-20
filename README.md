@@ -4,6 +4,8 @@ Turn your chapters, slide decks and exam dates into a realistic study plan –
 with Anki reviews built in, a weekly catch-up buffer, and a plan that adjusts
 itself when a day doesn't go as planned.
 
+**Live:** https://app.studymaster.workers.dev
+
 Docs: [Design](docs/DESIGN.md) · [Decisions](docs/DECISIONS.md) ·
 [Roadmap](docs/ROADMAP.md) · [Hosting & apps](docs/HOSTING.md) · [AI](docs/AI.md)
 

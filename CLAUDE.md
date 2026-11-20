@@ -24,7 +24,8 @@ npm run deploy       # manual deploy: build + wrangler deploy (normally not need
 ```
 
 Deployment: a Cloudflare Worker with static assets (`wrangler.jsonc` at the
-root) is built and deployed from GitHub on every push. See `docs/HOSTING.md`.
+root, Worker `app`) is built and deployed from GitHub on every push. Live at
+https://app.studymaster.workers.dev. See `docs/HOSTING.md`.
 
 Run `npm test && npm run typecheck` before every commit. CI runs the same
 (`.github/workflows/ci.yml`).

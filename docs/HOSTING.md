@@ -81,7 +81,9 @@ Cloudflare's current flow ("Workers & Pages → Create") makes a **Worker**
 that serves the built web app as static files (Workers Builds). Every push
 builds and deploys automatically.
 
-- Config: `wrangler.jsonc` at the repo root – Worker name `studymaster`,
+- **Live address: https://app.studymaster.workers.dev** (Worker `app` on the
+  account subdomain `studymaster`).
+- Config: `wrangler.jsonc` at the repo root – Worker name `app`,
   assets from `apps/web/dist`, unknown paths fall back to `index.html`.
   **The `name` must match the Worker's name in the dashboard.**
 - Dashboard build settings (Worker → Settings → Build):
@@ -93,8 +95,11 @@ builds and deploys automatically.
   | Deploy command | `npx wrangler deploy` |
   | Root directory | *(empty = repo root)* |
   Node 22 comes from `.nvmrc`.
-- Address: `https://studymaster.<your-subdomain>.workers.dev` (Settings →
-  Domains & Routes), later a custom domain.
+- Address: `https://<worker name>.<account subdomain>.workers.dev`. The
+  account subdomain is set under Workers & Pages → Account details →
+  Subdomain; the Worker name under the Worker's Settings → General. Rename
+  the Worker in the dashboard **before** pushing a new `name`, or the build
+  fails. Later: a custom domain.
 - Cache rules: `apps/web/public/_headers` (service worker and `index.html`
   never cached, hashed assets cached for a year) – Workers static assets
   read this file.
