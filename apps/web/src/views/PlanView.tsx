@@ -43,7 +43,7 @@ export function PlanView({ planner }: { planner: Planner }) {
 
       <Overview planner={planner} onPickWeek={(d) => setWeekStart(fromDayNumber(weekKey(d)))} weekStart={weekStart} />
 
-      <div className="grid gap-3 md:grid-cols-7">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-7">
         {days.map((d) => (
           <DayColumn key={d} date={d} planner={planner} subjects={subjects} onOpen={() => setOpenDay(d)} />
         ))}

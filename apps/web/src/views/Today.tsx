@@ -54,7 +54,7 @@ export function TodayView({ planner }: { planner: Planner }) {
         <CheckInCard key={d} planner={planner} date={d} subjects={subjects} prominent />
       ))}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <section className="space-y-4">
           <SectionTitle>Today</SectionTitle>
 
@@ -127,7 +127,7 @@ export function TodayView({ planner }: { planner: Planner }) {
           {tomorrowSessions.length > 0 && (
             <div>
               <SectionTitle>Tomorrow</SectionTitle>
-              <div className="grid gap-3 sm:grid-cols-2">
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                 {tomorrowSessions.map((s) => (
                   <SessionCard key={s.slot} session={s} subjects={subjects} compact />
                 ))}

@@ -71,7 +71,7 @@ export function SettingsView() {
         <p className="text-slate-500 dark:text-slate-400">Changes update your plan right away.</p>
       </header>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="space-y-6">
           <Section title="Study rhythm" description="How much you want to study on a normal day.">
             <RhythmSettings />

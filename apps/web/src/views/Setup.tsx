@@ -246,7 +246,7 @@ function SummaryStep() {
           ? "Everything fits with your normal rhythm. You can change anything later."
           : "It doesn't all fit with your normal rhythm. You'll see the options on the Today screen."}
       </StepHeader>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
           <p className="text-sm text-slate-500">Total work</p>
           <p className="mt-1 text-2xl font-semibold">{formatHours(minutes)}</p>

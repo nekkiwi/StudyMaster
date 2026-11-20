@@ -44,7 +44,7 @@ export function RhythmSettings() {
           className="w-full accent-indigo-600"
         />
       </Field>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Field label="Max chunks per session">
           <NumberInput min={1} max={6} value={s.maxChunksPerSession} onChange={(v) => update({ maxChunksPerSession: Math.max(1, Math.round(v)) })} />
         </Field>
@@ -136,7 +136,7 @@ export function AnkiSettingsForm() {
   const update = useStore((x) => x.updateSettings);
   const a = s.anki;
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <Field label="Anki at the start of every session (min)">
         <NumberInput min={0} max={60} value={a.minMinutesPerSession} onChange={(v) => update({ anki: { ...a, minMinutesPerSession: v } })} />
       </Field>
@@ -211,7 +211,7 @@ export function DaysOffEditor() {
           ))}
         </ul>
       )}
-      <div className="grid gap-3 rounded-2xl bg-slate-50 p-3 sm:grid-cols-2 dark:bg-slate-800/40">
+      <div className="grid grid-cols-1 gap-3 rounded-2xl bg-slate-50 p-3 sm:grid-cols-2 dark:bg-slate-800/40">
         <Field label="From">
           <TextInput type="date" value={draft.start} onChange={(e) => e.target.value && setDraft({ ...draft, start: e.target.value, end: draft.end < e.target.value ? e.target.value : draft.end })} />
         </Field>

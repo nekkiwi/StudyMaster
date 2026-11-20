@@ -47,7 +47,7 @@ export function SubjectsView({ planner }: { planner: Planner }) {
           </EmptyState>
         </Card>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {progress.map((p) => {
             const days = daysBetween(planner.today, p.subject.examDate);
             const deficit = status.get(p.subject.id)?.deficitMinutes ?? 0;

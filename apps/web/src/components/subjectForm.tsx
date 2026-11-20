@@ -29,7 +29,7 @@ export const WEIGHT_LABEL: Record<Weight, string> = {
 export function SubjectFields({ subject, onChange }: { subject: Subject; onChange: (s: Subject) => void }) {
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Subject">
           <TextInput value={subject.name} placeholder="e.g. Biology" onChange={(e) => onChange({ ...subject, name: e.target.value })} />
         </Field>
@@ -63,7 +63,7 @@ export function SubjectFields({ subject, onChange }: { subject: Subject; onChang
           }))}
         />
       </Field>
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <Field label="Exam date">
           <TextInput type="date" value={subject.examDate} onChange={(e) => e.target.value && onChange({ ...subject, examDate: e.target.value })} />
         </Field>
