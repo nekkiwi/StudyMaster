@@ -14,8 +14,8 @@
 ## Next, in order
 
 ### 1. Deploy as it is
-- ✅ Cloudflare Pages builds from GitHub on every push (setup in
-  [HOSTING.md](HOSTING.md#deployment)).
+- Cloudflare Worker with static assets, built from GitHub on every push
+  (`wrangler.jsonc`, setup in [HOSTING.md](HOSTING.md#deployment)).
 - "Install app" button (Android/desktop install prompt) + iPhone
   "Add to Home Screen" guide. See [HOSTING.md](HOSTING.md).
 

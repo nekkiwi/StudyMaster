@@ -20,11 +20,11 @@ npm run dev          # web app on http://localhost:5173
 npm test             # all tests (Vitest): planner + web app
 npm run typecheck
 npm run build        # production build → apps/web/dist
-npm run deploy       # manual deploy with wrangler (normally not needed)
+npm run deploy       # manual deploy: build + wrangler deploy (normally not needed)
 ```
 
-Deployment: Cloudflare Pages builds every push from GitHub (production =
-default branch, previews for other branches). See `docs/HOSTING.md`.
+Deployment: a Cloudflare Worker with static assets (`wrangler.jsonc` at the
+root) is built and deployed from GitHub on every push. See `docs/HOSTING.md`.
 
 Run `npm test && npm run typecheck` before every commit. CI runs the same
 (`.github/workflows/ci.yml`).
@@ -91,8 +91,7 @@ Done: planner (Anki as item category + Anki-only days, reviews, buffer,
 escalation, pacing), web app (wizard, Today with check-in, calendar,
 subjects, settings, approval banner, backup, offline PWA, dark mode).
 
-Next: see `docs/ROADMAP.md` – deploy to Cloudflare Pages with an
-"Install app" button, then the backend (login, sync, push check-ins), the
+Next: see `docs/ROADMAP.md` – "Install app" button, then the backend (login, sync, push check-ins), the
 built-in assistant, the MCP server and "Import with AI".
 
 When you make a design decision, add it to `docs/DECISIONS.md` and keep

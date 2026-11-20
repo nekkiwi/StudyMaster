@@ -1,0 +1,14 @@
+// Cloudflare Worker that serves the StudyMaster web app (static files).
+// Cloudflare Workers Builds runs `npm run build` and then `npx wrangler deploy`
+// on every push. Later the backend (API, MCP, cron) can live in this Worker too.
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  // Must match the Worker's name in the Cloudflare dashboard.
+  "name": "studymaster",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./apps/web/dist",
+    // The app uses hash routes; unknown paths fall back to index.html.
+    "not_found_handling": "single-page-application"
+  }
+}

@@ -14,8 +14,8 @@
 ## Architecture: everything on Cloudflare
 
 ```
-GitHub repo ──push──► Cloudflare Pages   →  studymaster.app (web app, static)
-                └──► Cloudflare Worker  →  /api   login, sync, check-ins, assistant
+GitHub repo ──push──► Cloudflare Worker  →  studymaster.app (web app, static assets)
+                                        →  /api   login, sync, check-ins, assistant (planned)
                                            /mcp   Claude connector
                                            cron   evening push notifications
                      Cloudflare D1       →  database (one record of app data per user)
@@ -23,7 +23,7 @@ GitHub repo ──push──► Cloudflare Pages   →  studymaster.app (web app
 
 | Part | Service | Cost |
 |---|---|---|
-| Web app | Cloudflare Pages – auto-deploy on push, free `*.pages.dev` address, preview URL per branch | free |
+| Web app | Cloudflare Worker with static assets – auto-deploy on push from GitHub, free `*.workers.dev` address | free |
 | Backend | Cloudflare Workers (free tier ~100k requests/day) + Cron Triggers | free |
 | Database | Cloudflare D1 (free tier ~5 GB) | free |
 | Login emails | Resend or similar (free tier ~3,000 emails/month) | free |
@@ -76,44 +76,49 @@ to Cloudflare. Firebase needs the pay-as-you-go plan for scheduled functions.)
 
 ## Deployment
 
-### Current setup: Cloudflare Pages builds from GitHub
-Every push builds and deploys automatically. The repo's default branch is
-production; every other branch gets its own preview link.
+### Current setup: a Cloudflare Worker with static assets, built from GitHub
+Cloudflare's current flow ("Workers & Pages → Create") makes a **Worker**
+that serves the built web app as static files (Workers Builds). Every push
+builds and deploys automatically.
 
-One-time setup in the Cloudflare dashboard:
-1. **Workers & Pages → Create → Pages → Connect to Git** (on newer dashboards:
-   *Create application → Pages → Import an existing Git repository*).
-2. Authorize GitHub and pick **nekkiwi/StudyMaster**.
-3. Settings:
-   | Field | Value |
-   |---|---|
-   | Project name | `studymaster` |
-   | Production branch | the repo's default branch |
-   | Framework preset | None |
-   | Build command | `npm run build` |
-   | Build output directory | `apps/web/dist` |
-   | Root directory | *(leave empty)* |
-   Node 22 comes from `.nvmrc`; dependencies are installed automatically.
-4. **Save and Deploy.** The app is then live at `https://<project>.pages.dev`
-   (Cloudflare adds a suffix if the name is taken).
+- Config: `wrangler.jsonc` at the repo root – Worker name `studymaster`,
+  assets from `apps/web/dist`, unknown paths fall back to `index.html`.
+  **The `name` must match the Worker's name in the dashboard.**
+- Dashboard build settings (Worker → Settings → Build):
+  | Field | Value |
+  |---|---|
+  | Git repository | `nekkiwi/StudyMaster` |
+  | Branch | the repo's default branch |
+  | Build command | `npm run build` |
+  | Deploy command | `npx wrangler deploy` |
+  | Root directory | *(empty = repo root)* |
+  Node 22 comes from `.nvmrc`.
+- Address: `https://studymaster.<your-subdomain>.workers.dev` (Settings →
+  Domains & Routes), later a custom domain.
+- Cache rules: `apps/web/public/_headers` (service worker and `index.html`
+  never cached, hashed assets cached for a year) – Workers static assets
+  read this file.
+- Nice side effect: the planned backend (API, MCP, cron) can be added to this
+  same Worker with a `main` script, without moving the site.
 
-Cache rules live in `apps/web/public/_headers` (service worker and
-`index.html` never cached, hashed assets cached for a year).
+Without `wrangler.jsonc`, `wrangler deploy` tries to auto-detect the app and
+fails in our monorepo root ("application detection logic has been run in the
+root of a workspace").
 
-Why not deploy from a Claude Code cloud session: Pages uploads use a
-short-lived upload key in the `Authorization` header, which the cloud
-session's network proxy replaces with the saved API token, so the upload
-fails (`Authorization failed [code: 8000013]`). Git builds avoid this.
+Why not deploy from a Claude Code cloud session: uploads use a short-lived
+upload key in the `Authorization` header, which the cloud session's network
+proxy replaces with the saved API token, so the upload fails
+(`Authorization failed [code: 8000013]`). Git builds avoid this.
 
 ### Manual deploy (fallback, from your own computer)
 ```bash
 npx wrangler@4 login
-npm run deploy      # builds and uploads to the "studymaster" Pages project
+npm run deploy      # builds and runs `wrangler deploy` with wrangler.jsonc
 ```
 
 ### Next steps
-1. ✅ Cloudflare Pages from GitHub.
+1. Cloudflare Worker (static assets) built from GitHub – see above.
 2. Add the **Install app** button + iPhone guide.
 3. **Worker + D1**: login (guest-first), sync, push check-ins.
-4. **Custom domain** (Pages → Custom domains).
+4. **Custom domain** (Worker → Settings → Domains & Routes).
 5. **Google Play** via PWABuilder once real people use it.

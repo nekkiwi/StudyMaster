@@ -8,8 +8,7 @@
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit",
-    "deploy": "npm run build && npx wrangler@4 pages deploy dist --project-name studymaster --branch main"
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@studymaster/core": "*",
