@@ -135,9 +135,19 @@ export interface Slot {
   kind: SlotKind;
 }
 
-/** A piece of a chunk planned into a session. */
+/**
+ * What a plan item is about:
+ * chapter = pages · slides = a slide deck · mixed = pages and slides ·
+ * anki = Anki review (not tied to a chunk)
+ */
+export type ItemKind = "chapter" | "slides" | "mixed" | "anki";
+
+/** One thing to do in a session: a piece of a chunk, or an Anki review. */
 export interface PlanItem {
+  kind: ItemKind;
+  /** The chunk this piece belongs to. For Anki items: "anki@<slot>". */
   chunkId: string;
+  /** Empty for Anki items (they can cover several subjects, see `decks`). */
   subjectId: string;
   /** Chunk title without the part suffix. */
   baseTitle: string;
@@ -150,11 +160,20 @@ export interface PlanItem {
   cards: number;
   /** How much of each step this piece completes (added to Chunk.done). */
   deltas: Record<StepKey, number>;
+  /** Anki items: subjects whose decks to review, most important first. */
+  decks?: string[];
 }
 
+/**
+ * study  = Anki review + chunk work
+ * review = Anki review + exam review right before an exam
+ * anki   = only an Anki review (days without study, so reviews never pause)
+ */
+export type SessionType = "study" | "review" | "anki";
+
 export interface PlannedSession extends Slot {
-  type: "study" | "review";
-  ankiMinutes: number;
+  type: SessionType;
+  /** In order. Study and review sessions start with an Anki item. */
   items: PlanItem[];
   /** For review sessions: the subject whose exam is next. */
   reviewSubjectId?: string;

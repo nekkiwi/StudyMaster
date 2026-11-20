@@ -4,7 +4,8 @@ Turn your chapters, slide decks and exam dates into a realistic study plan –
 with Anki reviews built in, a weekly catch-up buffer, and a plan that adjusts
 itself when a day doesn't go as planned.
 
-See [docs/DESIGN.md](docs/DESIGN.md) for how it works.
+Docs: [Design](docs/DESIGN.md) · [Decisions](docs/DECISIONS.md) ·
+[Roadmap](docs/ROADMAP.md) · [Hosting & apps](docs/HOSTING.md) · [AI](docs/AI.md)
 
 ## Status
 
@@ -12,8 +13,8 @@ See [docs/DESIGN.md](docs/DESIGN.md) for how it works.
 - `apps/web` – the web app: setup wizard, Today with check-in, calendar,
   subjects, settings. Works offline and can be installed on phone and desktop.
   Data is stored on the device.
-- Next: Anki on free days, backend (sync + push notifications), built-in
-  assistant and MCP connector – see the roadmap in `docs/DESIGN.md`
+- Next: deploy on Cloudflare, backend (login, sync, push check-ins),
+  built-in assistant and MCP connector – see [docs/ROADMAP.md](docs/ROADMAP.md)
 
 Working with Claude Code? `CLAUDE.md` has the commands, layout and conventions.
 
@@ -47,5 +48,5 @@ const result = planWithEscalation(
 
 result.level;          // "normal" | "useWeeklyBuffer" | "extraSessions" | …
 result.needsApproval;  // ask the user before applying?
-result.plan.sessions;  // day-by-day sessions with Anki block + chunks
+result.plan.sessions;  // day-by-day sessions: Anki review item + chapters / slide decks
 ```

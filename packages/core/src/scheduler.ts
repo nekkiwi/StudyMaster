@@ -1,7 +1,10 @@
 import { addDays, type ISODate } from "./dates.js";
 import {
+  ankiItem,
+  ankiMinutesPerDay,
   ankiMinutesPerSession,
   cardsMade,
+  isAnkiItem,
   splitChunk,
   totalMinutes,
 } from "./effort.js";
@@ -36,6 +39,11 @@ const MAX_REVIEW_SHARE = 0.6;
 const MIN_FRAGMENT_MINUTES = 30;
 /** A piece may run over by this much instead of leaving a tiny leftover. */
 const TAIL_TOLERANCE = 10;
+/** Anki-only sessions on days without study are at least this long. */
+const ANKI_ONLY_MIN_MINUTES = 15;
+/** Exams this close count as "coming up" when choosing Anki decks. */
+const FOCUS_DAYS = 14;
+const MAX_DECKS = 3;
 
 /**
  * Builds one plan from `from` (inclusive) until the last exam.
@@ -43,11 +51,13 @@ const TAIL_TOLERANCE = 10;
  * 1. Build the slot grid (blocked days, exam halves, buffer and extra slots).
  * 2. Reserve a short review session right before every exam, first, so
  *    back-to-back exams still get one each.
- * 3. Walk the slots in time order. Each session starts with an Anki block;
- *    the rest is filled with the subject that has the least slack
+ * 3. Walk the slots in time order. Each session starts with an Anki review
+ *    item; the rest is filled with the subject that has the least slack
  *    (free capacity before its deadline minus remaining work).
  *    Buffer and extra slots are only used by subjects that would not
  *    make it otherwise.
+ * 4. Days without any session get a short Anki-only session, so reviews
+ *    never pause.
  */
 export function planOnce(state: StudyState, from: ISODate, options: PlanOptions): Plan {
   const s = state.settings;
@@ -107,7 +117,6 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
     reviews.set(key, {
       ...slot,
       type: "review",
-      ankiMinutes: 0,
       items: [],
       reviewSubjectId: subject.id,
       reviewMinutes: Math.round(minutes),
@@ -150,18 +159,29 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
   let anki = 0;
   let fillIndex = 0;
   const sessions: PlannedSession[] = [];
+  const cardsOnDate = new Map<ISODate, number>();
+
+  // Decks worth reviewing: subjects in this session first, then upcoming exams.
+  const decksFor = (date: ISODate, first: string[]): string[] => {
+    const upcoming = subjects
+      .filter((x) => x.examDate >= date && x.examDate <= addDays(date, FOCUS_DAYS))
+      .map((x) => x.id);
+    const decks = [...new Set([...first, ...upcoming])];
+    return (decks.length > 0 ? decks : subjects.map((x) => x.id)).slice(0, MAX_DECKS);
+  };
 
   for (const slot of grid) {
     if (slot.date !== currentDate) {
       currentDate = slot.date;
       activeCards += pendingCards;
       pendingCards = 0;
+      cardsOnDate.set(slot.date, activeCards);
       anki = ankiMinutesPerSession(activeCards, sessionsPerDay.get(slot.date) ?? 1, s);
     }
     const key = slotKey(slot.date, slot.slot);
     const review = reviews.get(key);
     if (review) {
-      review.ankiMinutes = anki;
+      review.items = [ankiItem(slot.slot, anki, decksFor(slot.date, [review.reviewSubjectId!]))];
       sessions.push(review);
       continue;
     }
@@ -242,17 +262,30 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
     }
 
     if (items.length > 0) {
-      sessions.push({
-        ...slot,
-        type: "study",
-        ankiMinutes: anki,
-        items: mergeSameChunk(items).map(roundItem),
-      });
+      const work = mergeSameChunk(items).map(roundItem);
+      const decks = decksFor(slot.date, work.map((x) => x.subjectId));
+      sessions.push({ ...slot, type: "study", items: [ankiItem(slot.slot, anki, decks), ...work] });
     }
   }
 
+  // Step 4: Anki-only sessions on days without any other session.
+  const busyDays = new Set(sessions.map((x) => x.date));
+  const examDays = new Set(subjects.map((x) => x.examDate));
+  for (const slot of grid) {
+    if (slot.kind !== "normal" || busyDays.has(slot.date) || examDays.has(slot.date)) continue;
+    busyDays.add(slot.date);
+    const cards = cardsOnDate.get(slot.date) ?? 0;
+    if (cards < 1) continue;
+    const minutes = Math.min(
+      s.sessionMinutes * s.anki.maxShareOfSession,
+      Math.max(ANKI_ONLY_MIN_MINUTES, ankiMinutesPerDay(cards, s)),
+    );
+    sessions.push({ ...slot, type: "anki", items: [ankiItem(slot.slot, minutes, decksFor(slot.date, []))] });
+  }
+  sessions.sort((a, b) => slotKey(a.date, a.slot).localeCompare(slotKey(b.date, b.slot)));
+
   const unscheduled = subjects.flatMap((x) => queues.get(x.id)!.map(roundItem));
-  relabelParts([...sessions.flatMap((x) => x.items), ...unscheduled]);
+  relabelParts([...sessions.flatMap((x) => x.items).filter((x) => !isAnkiItem(x)), ...unscheduled]);
   const statuses: SubjectStatus[] = subjects.map((subject) => {
     const deficit = queues.get(subject.id)!.reduce((sum, x) => sum + x.minutes, 0);
     const total = initialRemaining.get(subject.id)!;

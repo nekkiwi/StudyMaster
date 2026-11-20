@@ -4,9 +4,12 @@ import { addDays } from "../src/dates.js";
 import { diffPlans } from "../src/diff.js";
 import { planOnce, planWithEscalation } from "../src/scheduler.js";
 import { buildSlotGrid } from "../src/slots.js";
-import type { Settings } from "../src/types.js";
+import type { PlanItem, Settings } from "../src/types.js";
 import { validateState } from "../src/validate.js";
 import { chunks, state, subject } from "./helpers.js";
+
+/** Chunk work in a session or day, without the Anki review items. */
+const work = (items: PlanItem[]) => items.filter((i) => i.kind !== "anki");
 
 // 2026-11-23 is a Monday.
 const MON = "2026-11-23";
@@ -71,15 +74,49 @@ describe("planOnce", () => {
     expect(plan.feasible).toBe(true);
   });
 
-  it("starts every session with an Anki block", () => {
+  it("starts every session with an Anki review item", () => {
     const st = state([subject("bio", "2026-12-10")], chunks("bio", 5));
     const plan = planOnce(st, MON, normal);
-    for (const session of plan.sessions) expect(session.ankiMinutes).toBeGreaterThanOrEqual(10);
-    for (const session of plan.sessions.filter((x) => x.type === "study")) {
-      const used = session.ankiMinutes + session.items.reduce((a, i) => a + i.minutes, 0);
-      expect(used).toBeLessThanOrEqual(st.settings.sessionMinutes + 1);
-      expect(session.items.length).toBeLessThanOrEqual(st.settings.maxChunksPerSession);
+    for (const session of plan.sessions) {
+      expect(session.items[0]).toMatchObject({ kind: "anki", title: "Anki review" });
+      expect(session.items[0]!.minutes).toBeGreaterThanOrEqual(10);
     }
+    for (const session of plan.sessions.filter((x) => x.type === "study")) {
+      const used = session.items.reduce((a, i) => a + i.minutes, 0);
+      expect(used).toBeLessThanOrEqual(st.settings.sessionMinutes + 1);
+      expect(work(session.items).length).toBeLessThanOrEqual(st.settings.maxChunksPerSession);
+      expect(work(session.items).every((i) => i.kind === "chapter")).toBe(true);
+    }
+  });
+
+  it("adds short Anki-only sessions on days without study", () => {
+    // Finish early: 3 chapters done in two days, then only Anki until the review.
+    const st = state([subject("bio", "2026-12-04")], chunks("bio", 3), { pacing: "early" });
+    const plan = planOnce(st, MON, normal);
+    const ankiOnly = plan.sessions.filter((x) => x.type === "anki");
+    expect(ankiOnly.length).toBeGreaterThan(0);
+    for (const session of ankiOnly) {
+      expect(session.items).toHaveLength(1);
+      expect(session.items[0]).toMatchObject({ kind: "anki", decks: ["bio"] });
+      expect(session.items[0]!.minutes).toBeGreaterThanOrEqual(15);
+      expect(session.kind).toBe("normal");
+    }
+    // Every day from Monday to the exam has something, except the exam day.
+    const days = new Set(plan.sessions.map((x) => x.date));
+    for (const d of ["2026-11-23", "2026-11-25", "2026-11-28", "2026-12-02", "2026-12-03"]) {
+      expect(days.has(d)).toBe(true);
+    }
+    expect(days.has("2026-12-04")).toBe(false);
+  });
+
+  it("labels slide decks and mixed chunks", () => {
+    const st = state([subject("bio", "2026-12-20")], [
+      { id: "deck", subjectId: "bio", title: "Lecture 1", pages: 0, slides: 40, order: 1 },
+      { id: "both", subjectId: "bio", title: "Ch 2 + slides", pages: 10, slides: 20, order: 2 },
+    ], { pacing: "early" });
+    const items = work(planOnce(st, MON, normal).sessions.flatMap((x) => x.items));
+    expect(items.find((i) => i.chunkId === "deck")!.kind).toBe("slides");
+    expect(items.find((i) => i.chunkId === "both")!.kind).toBe("mixed");
   });
 
   it("puts a short review session in the last slot before the exam", () => {
@@ -102,7 +139,7 @@ describe("planOnce", () => {
     // B's review is on A's exam day afternoon, B's main study ends 2 days before.
     expect(reviews.find((x) => x.reviewSubjectId === "b")).toMatchObject({ date: "2026-12-07", slot: "pm1" });
     for (const session of plan.sessions) {
-      for (const item of session.items) {
+      for (const item of work(session.items)) {
         const exam = item.subjectId === "a" ? "2026-12-07" : "2026-12-08";
         expect(session.date < addDays(exam, -2)).toBe(true);
       }
@@ -116,7 +153,7 @@ describe("planOnce", () => {
       [...chunks("late", 6), ...chunks("soon", 6)],
     );
     const plan = planOnce(st, MON, normal);
-    expect(plan.sessions[0]!.items[0]!.subjectId).toBe("soon");
+    expect(work(plan.sessions[0]!.items)[0]!.subjectId).toBe("soon");
   });
 
   it("keeps the weekly buffer empty when not needed", () => {
@@ -129,7 +166,7 @@ describe("planOnce", () => {
   it("keeps chunk order within a subject", () => {
     const st = state([subject("bio", "2026-12-20")], chunks("bio", 8));
     const plan = planOnce(st, MON, normal);
-    const order = [...new Set(plan.sessions.flatMap((x) => x.items).map((i) => i.chunkId))];
+    const order = [...new Set(work(plan.sessions.flatMap((x) => x.items)).map((i) => i.chunkId))];
     expect(order).toEqual(chunks("bio", 8).map((c) => c.id));
   });
 
@@ -141,11 +178,11 @@ describe("planOnce", () => {
     const study = plan.sessions.filter((x) => x.type === "study");
     const full = study.slice(0, -1); // all but the last session
     for (const session of full) {
-      const used = session.items.reduce((a, i) => a + i.minutes, 0) + session.ankiMinutes;
+      const used = session.items.reduce((a, i) => a + i.minutes, 0);
       expect(used).toBeGreaterThanOrEqual(st.settings.sessionMinutes - 30);
     }
     // Chunks that span several sessions are numbered in order; others have no suffix.
-    const all = study.flatMap((x) => x.items);
+    const all = work(study.flatMap((x) => x.items));
     for (const id of new Set(all.map((i) => i.chunkId))) {
       const parts = all.filter((i) => i.chunkId === id);
       const base = parts[0]!.baseTitle;
@@ -229,7 +266,7 @@ describe("check-in and replanning", () => {
 
   it("'yes' marks the day's work as done", () => {
     const plan = planOnce(st, MON, normal);
-    const today = itemsForDate(plan, MON);
+    const today = work(itemsForDate(plan, MON));
     const updated = checkInDay(st.chunks, plan, MON, "yes");
     for (const item of today) {
       expect(updated.find((c) => c.id === item.chunkId)!.done?.read).toBeGreaterThan(0);
@@ -241,7 +278,7 @@ describe("check-in and replanning", () => {
 
   it("'no' moves the work to later days", () => {
     const plan = planOnce(st, MON, normal);
-    const today = itemsForDate(plan, MON);
+    const today = work(itemsForDate(plan, MON));
     const updated = checkInDay(st.chunks, plan, MON, "no");
     const next = planOnce({ ...st, chunks: updated }, addDays(MON, 1), normal);
     const planned = next.sessions.flatMap((x) => x.items).map((x) => x.chunkId);
@@ -251,13 +288,23 @@ describe("check-in and replanning", () => {
 
   it("'no' with partial progress only counts what was done", () => {
     const plan = planOnce(st, MON, normal);
-    const first = itemsForDate(plan, MON)[0]!;
+    const first = work(itemsForDate(plan, MON))[0]!;
     const updated = checkInDay(st.chunks, plan, MON, "no", [
       { chunkId: first.chunkId, part: first.part, steps: ["read"] },
     ]);
     const chunk = updated.find((c) => c.id === first.chunkId)!;
     expect(chunk.done).toMatchObject({ read: first.deltas.read });
     expect(chunk.done?.cards ?? 0).toBe(0);
+  });
+});
+
+describe("check-in with Anki items", () => {
+  it("records Anki but doesn't change any chunk", () => {
+    const st = state([subject("bio", "2026-12-10")], chunks("bio", 4));
+    const plan = planOnce(st, MON, normal);
+    const anki = itemsForDate(plan, MON).find((i) => i.kind === "anki")!;
+    const updated = checkInDay(st.chunks, plan, MON, "no", [{ chunkId: anki.chunkId, part: 1 }]);
+    expect(updated).toEqual(st.chunks);
   });
 });
 

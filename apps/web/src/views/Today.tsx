@@ -1,4 +1,4 @@
-import { addDays, daysBetween, isBlocked, type Subject } from "@studymaster/core";
+import { addDays, daysBetween, isBlocked, sessionMinutes, type Subject } from "@studymaster/core";
 import { CalendarCheck2, Coffee, Flame, Palmtree, PartyPopper, Sparkles } from "lucide-react";
 import { useMemo } from "react";
 import { CheckInCard } from "../components/checkin";
@@ -24,20 +24,13 @@ export function TodayView({ planner }: { planner: Planner }) {
   const blocked = useStore((s) => s.blocked);
   const { today, shown, state } = planner;
   const subjects = useMemo(() => new Map(state.subjects.map((s) => [s.id, s])), [state.subjects]);
-  const focus = state.subjects.filter((s) => {
-    const d = daysBetween(today, s.examDate);
-    return d >= 0 && d <= 14;
-  });
 
   const sessions = shown.plan.sessions.filter((s) => s.date === today);
   const record = checkIns[today];
   const blockedToday = blocked.find((b) => b.start <= today && b.end >= today);
   const bufferToday = shown.plan.bufferSlots.filter((s) => s.date === today);
   const examsToday = state.subjects.filter((s) => s.examDate === today);
-  const minutes = sessions.reduce(
-    (a, s) => a + s.ankiMinutes + (s.reviewMinutes ?? 0) + s.items.reduce((b, i) => b + i.minutes, 0),
-    0,
-  );
+  const minutes = sessions.reduce((a, s) => a + sessionMinutes(s), 0);
   const evening = new Date().getHours() >= 17;
 
   const tomorrow = addDays(today, 1);
@@ -117,7 +110,7 @@ export function TodayView({ planner }: { planner: Planner }) {
           ) : (
             <>
               {sessions.map((s) => (
-                <SessionCard key={s.slot} session={s} subjects={subjects} focus={focus} />
+                <SessionCard key={s.slot} session={s} subjects={subjects} />
               ))}
               {bufferToday.length > 0 && (
                 <div className="buffer-stripes rounded-2xl border border-dashed border-amber-300 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/40 dark:text-amber-200">
@@ -136,7 +129,7 @@ export function TodayView({ planner }: { planner: Planner }) {
               <SectionTitle>Tomorrow</SectionTitle>
               <div className="grid gap-3 sm:grid-cols-2">
                 {tomorrowSessions.map((s) => (
-                  <SessionCard key={s.slot} session={s} subjects={subjects} focus={focus} compact />
+                  <SessionCard key={s.slot} session={s} subjects={subjects} compact />
                 ))}
               </div>
             </div>

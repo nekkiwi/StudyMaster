@@ -1,5 +1,39 @@
-import type { Chunk, PlanItem, Settings, StepKey, Subject } from "./types.js";
+import type { Chunk, ItemKind, PlannedSession, PlanItem, Settings, SlotId, StepKey, Subject } from "./types.js";
 import { STEPS } from "./types.js";
+
+/** Chapter (pages), slide deck (slides) or both. */
+export function chunkKind(chunk: Chunk): Exclude<ItemKind, "anki"> {
+  if (chunk.pages > 0 && chunk.slides > 0) return "mixed";
+  return chunk.slides > 0 ? "slides" : "chapter";
+}
+
+export const ANKI_ITEM_PREFIX = "anki@";
+
+export function isAnkiItem(item: PlanItem): boolean {
+  return item.kind === "anki";
+}
+
+/** An Anki review item. `decks` = subject ids, most important first. */
+export function ankiItem(slot: SlotId, minutes: number, decks: string[]): PlanItem {
+  return {
+    kind: "anki",
+    chunkId: `${ANKI_ITEM_PREFIX}${slot}`,
+    subjectId: "",
+    baseTitle: "Anki review",
+    title: "Anki review",
+    part: 1,
+    parts: 1,
+    minutes: Math.round(minutes),
+    cards: 0,
+    deltas: { read: 0, summary: 0, cards: 0 },
+    decks,
+  };
+}
+
+/** Total length of a session: all items plus the exam review. */
+export function sessionMinutes(session: PlannedSession): number {
+  return session.items.reduce((sum, i) => sum + i.minutes, 0) + (session.reviewMinutes ?? 0);
+}
 
 /** Estimated Anki cards for a chunk (or the real count once entered). */
 export function estimatedCards(chunk: Chunk, settings: Settings): number {
@@ -42,7 +76,7 @@ export function cardsMade(chunk: Chunk, settings: Settings): number {
   return estimatedCards(chunk, settings) * doneFraction(chunk, "cards");
 }
 
-/** Biggest piece a single session can hold next to its Anki block. */
+/** Biggest piece a single session can hold next to its Anki review. */
 export function maxPieceMinutes(settings: Settings): number {
   return settings.sessionMinutes * (1 - settings.anki.maxShareOfSession);
 }
@@ -74,6 +108,7 @@ export function splitChunk(chunk: Chunk, subject: Subject, settings: Settings): 
     const deltas: Record<StepKey, number> = { read: 0, summary: 0, cards: 0 };
     for (const k of STEPS) deltas[k] = left[k] / parts;
     items.push({
+      kind: chunkKind(chunk),
       chunkId: chunk.id,
       subjectId: chunk.subjectId,
       baseTitle: chunk.title,
@@ -88,6 +123,12 @@ export function splitChunk(chunk: Chunk, subject: Subject, settings: Settings): 
   return items;
 }
 
+/** Minutes of Anki per day for this many existing cards (before limits). */
+export function ankiMinutesPerDay(activeCards: number, settings: Settings): number {
+  const a = settings.anki;
+  return (activeCards * a.dueFractionPerDay * a.secondsPerReview) / 60;
+}
+
 /**
  * Anki review time at the start of each session. Grows with the number of
  * existing cards, never below the minimum and never above the max share.
@@ -98,8 +139,7 @@ export function ankiMinutesPerSession(
   settings: Settings,
 ): number {
   const a = settings.anki;
-  const dailyMinutes = (activeCards * a.dueFractionPerDay * a.secondsPerReview) / 60;
-  const perSession = dailyMinutes / Math.max(1, sessionsThatDay);
+  const perSession = ankiMinutesPerDay(activeCards, settings) / Math.max(1, sessionsThatDay);
   const cap = a.maxShareOfSession * settings.sessionMinutes;
   return Math.round(Math.min(cap, Math.max(a.minMinutesPerSession, perSession)));
 }

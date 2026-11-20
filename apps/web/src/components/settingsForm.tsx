@@ -19,14 +19,14 @@ export function RhythmSettings() {
 
   return (
     <div className="space-y-5">
-      <Field label="Sessions per day" hint={COUNT_HINT[s.preferredSessionsPerDay]}>
+      <Field label="Sessions per day" hint={COUNT_HINT[s.preferredSessionsPerDay]} group>
         <Segmented
           value={s.preferredSessionsPerDay}
           onChange={(v) => update({ preferredSessionsPerDay: v, maxSessionsPerDay: Math.max(v, s.maxSessionsPerDay) as SessionCount })}
           options={COUNTS.map((c) => ({ value: c, label: String(c), hint: COUNT_HINT[c] }))}
         />
       </Field>
-      <Field label="Most sessions I'd accept on a busy day" hint="Only used if you fall behind, and only after you agree.">
+      <Field label="Most sessions I'd accept on a busy day" hint="Only used if you fall behind, and only after you agree." group>
         <Segmented
           value={s.maxSessionsPerDay}
           onChange={(v) => update({ maxSessionsPerDay: Math.max(v, s.preferredSessionsPerDay) as SessionCount })}
@@ -62,6 +62,7 @@ export function RhythmSettings() {
             ? "Work is spread steadily until each exam's finish date, so Anki keeps running."
             : "Material is finished as early as possible; after that only reviews."
         }
+        group
       >
         <Segmented
           value={s.pacing}
@@ -72,7 +73,7 @@ export function RhythmSettings() {
           ]}
         />
       </Field>
-      <Field label="Finish main study before each exam" hint="The last days before an exam are for review only.">
+      <Field label="Finish main study before each exam" hint="The last days before an exam are for review only." group>
         <Segmented
           value={s.examBufferDays}
           onChange={(v) => update({ examBufferDays: v })}

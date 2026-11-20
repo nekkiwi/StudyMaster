@@ -1,4 +1,5 @@
 import {
+  chunkKind,
   estimatedCards,
   remainingMinutes,
   totalMinutes,
@@ -14,6 +15,7 @@ import { parseBulk } from "../lib/bulk";
 import { SUBJECT_COLORS } from "../lib/colors";
 import { formatMinutes, newId } from "../lib/format";
 import { useStore } from "../store";
+import { KIND_ICON, KIND_LABEL } from "./session";
 import { Button, cx, Field, NumberInput, Segmented, TextArea, TextInput } from "./ui";
 
 export const WEIGHT_LABEL: Record<Weight, string> = {
@@ -31,7 +33,7 @@ export function SubjectFields({ subject, onChange }: { subject: Subject; onChang
         <Field label="Subject">
           <TextInput value={subject.name} placeholder="e.g. Biology" onChange={(e) => onChange({ ...subject, name: e.target.value })} />
         </Field>
-        <Field label="Color">
+        <Field label="Color" group>
           <div className="flex h-10 items-center gap-1.5">
             {SUBJECT_COLORS.map((c) => (
               <button
@@ -46,7 +48,7 @@ export function SubjectFields({ subject, onChange }: { subject: Subject; onChang
           </div>
         </Field>
       </div>
-      <Field label="How hard is it for you?" hint="Harder subjects get more time per page.">
+      <Field label="How hard is it for you?" hint="Harder subjects get more time per page." group>
         <Segmented
           value={subject.weight}
           onChange={(w) => onChange({ ...subject, weight: w })}
@@ -65,7 +67,7 @@ export function SubjectFields({ subject, onChange }: { subject: Subject; onChang
         <Field label="Exam date">
           <TextInput type="date" value={subject.examDate} onChange={(e) => e.target.value && onChange({ ...subject, examDate: e.target.value })} />
         </Field>
-        <Field label="Exam time">
+        <Field label="Exam time" group>
           <Segmented
             value={subject.examHalf ?? "am"}
             onChange={(h) => onChange({ ...subject, examHalf: h })}
@@ -153,9 +155,14 @@ function ChunkRow({
   onMove: (d: -1 | 1) => void;
 }) {
   const done = left < 0.5;
+  const kind = chunkKind(chunk);
+  const KindIcon = KIND_ICON[kind];
   return (
     <li className={cx("rounded-2xl border border-slate-200 p-3 dark:border-slate-800", done && "bg-emerald-50/50 dark:bg-emerald-500/5")}>
       <div className="flex flex-wrap items-center gap-2">
+        <span title={KIND_LABEL[kind]} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
+          <KindIcon size={16} />
+        </span>
         <TextInput className="min-w-40 flex-1" value={chunk.title} aria-label="Title" onChange={(e) => onChange({ ...chunk, title: e.target.value })} />
         <div className="flex items-center gap-1.5">
           <NumberInput className="w-20" aria-label="Pages" min={0} value={chunk.pages} onChange={(v) => onChange({ ...chunk, pages: Math.max(0, Math.round(v)) })} />

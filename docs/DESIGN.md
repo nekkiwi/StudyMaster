@@ -1,147 +1,188 @@
-# StudyMaster – Design
+# StudyMaster – Product & Design
 
-A free, simple web app (desktop + mobile) that turns a list of study material
-and exam dates into a day-by-day study plan, and keeps that plan up to date as
-real life happens.
+> The full picture of what we're building and why. Related docs:
+> [AI.md](AI.md) (assistant, Claude connector) · [HOSTING.md](HOSTING.md)
+> (hosting, Android, onboarding) · [DECISIONS.md](DECISIONS.md) (why we chose
+> what) · [ROADMAP.md](ROADMAP.md) (what's next).
 
-## Core ideas
+## 1. Vision
 
-### Study material = chunks
-A **chunk** is one study unit: a book chapter, a slide deck, or both (pages
-*and* slides). Chunks belong to a **subject**, which has an **exam date** and a
-**weight** (0.5 · 0.8 · 1.0 · 1.2 · 1.5) for easier or harder subjects.
+A web app that turns "I have these exams and this much material" into a
+realistic day-by-day study plan, shown in a calm, elegant dashboard, and that
+keeps the plan honest as real life happens.
 
-### Everything becomes "effort minutes"
-Each chunk has three steps: **📖 read · 📝 summarize · 🃏 make Anki cards**.
+**Principles**
 
-```
-read    = pages × 3 min   + slides × 1 min
-summary = pages × 1 min   + slides × 0.5 min
-cards   = (pages × 1.5 + slides × 0.7) cards × 1.5 min
-effort  = (read + summary + cards) × weight
-```
+1. **Free and simple.** No cost for users, minimal running cost for us, no
+   account needed to start.
+2. **Works everywhere.** Browser on desktop and phone, installable as an app on
+   Android (and iPhone), usable from any device once sync exists.
+3. **Plans the real work.** Studying is not just reading: it's reading,
+   summarizing, making Anki cards and reviewing Anki every day.
+4. **Plans well in advance.** Main study ends before exams; a short review
+   sits right before each exam, even when exams are back to back.
+5. **Adapts, but never silently overbooks.** Missed days are re-planned
+   automatically. Anything beyond the user's normal rhythm (buffer time,
+   extra sessions, a shorter gap before an exam) needs the user's OK.
+6. **AI is optional and invisible.** The app works fully without AI. AI help
+   makes setup and changes faster, without users needing an AI account.
 
-All rates can be changed. Once the real number of cards is entered, it replaces
-the estimate.
+## 2. Main flows
 
-### Sessions
-- A session is 2–3 h (default 150 min).
-- 1–4 sessions per day: `am1, am2` in the morning, `pm1, pm2` in the afternoon.
-- The user sets a **preferred** number (normal plan) and a **max** number
-  (only used with approval).
-- **Every session starts with an Anki review block**: at least 10 min, growing
-  with the number of cards made, never more than 30 % of the session.
-- At most N chunks per session; big chunks are split automatically
-  (max pages / slides per chunk, and what fits in a session).
+**First time (onboarding)** – a 5-step wizard, about 5 minutes:
+1. *Exams:* subjects with exam date, morning/afternoon, difficulty weight.
+2. *Material:* chapters and slide decks with page/slide counts. Quick entry
+   like `Ch 1-8: 22, 18, 30, …` or `Lecture 3: 45 slides`.
+3. *Your week:* sessions per day (preferred and max), session length, pace,
+   chunk limits, weekly buffer.
+4. *Days off:* vacation, breaks, other blocked days.
+5. *Your plan:* summary – total hours, sessions, whether everything fits.
+"Try with example data" skips all of this for a quick look.
 
-### Days you can't study
-Blocked ranges (vacation, sick, break, other) never get any sessions.
+**Every day** – open *Today*: the day's sessions, each a list of items
+(Anki review, chapter pieces, slide decks). In the evening: *Did you finish
+today's plan?* **Yes / No**.
 
-### Exams
-- **Main study ends early**: by default 2 days before the exam.
-- **A short review session** goes in the last free slot before each exam
-  (max 60 % of a session). Reviews are reserved *first*, so back-to-back
-  exams each still get one.
-- On exam day, the exam's half (morning/afternoon) has no sessions.
+**When life happens** – a "No", a sick day added, a new chapter: the plan
+re-plans from the next day. If it no longer fits the normal rhythm, a banner
+proposes the smallest change (see §6) and waits for approval.
 
-### Weekly buffer = catch-up reserve
-One half-day per week is planned **empty** (a fixed half-day or automatic,
-avoiding exam days and the day before an exam). It is only used to catch up
-after falling behind, and only when the user agrees. If it isn't needed, it's
-free time.
+## 3. Concepts & data model
 
-## The planner (`packages/core`)
+All types live in `packages/core/src/types.ts`.
 
-`planOnce(state, from, options)`:
-1. Build the slot grid (blocked days, exam halves, buffer and extra slots).
-2. Reserve review sessions right before each exam.
-3. Walk the slots in time order. Each session gets its Anki block, then the
-   subject with the **least slack** (free capacity before its deadline minus
-   remaining work) fills the rest, in chunk order. A session prefers to stay
-   on one subject unless another is at risk. Pieces that don't fit are cut to
-   fill the session (no leftovers under 30 min).
-4. Buffer and extra slots are only used by subjects that would not make it
-   otherwise, and buffer comes before extra sessions.
-5. **Pacing** (setting): `even` (default) spreads each subject's work steadily
-   until its finish date, so there's study (and Anki) on most days. A subject
-   only takes a slot when it is behind its steady pace, or when time gets
-   tight, in which case it falls back to as-soon-as-possible. `early` finishes
-   material as soon as possible.
+| Concept | What it is |
+|---|---|
+| **Subject** | Name, color, exam date, exam half (`am`/`pm`), **weight** |
+| **Weight** | Preset difficulty: `0.5` very easy · `0.8` easy · `1.0` normal · `1.2` hard · `1.5` very hard. Multiplies all effort. |
+| **Chunk** | One unit of material: a chapter (`pages`), a slide deck (`slides`) or both. Has an order within its subject, optional real card count, and progress per step (`done.read/summary/cards`, 0–1). |
+| **Steps** | Every chunk is worked through as 📖 read → 📝 summarize → 🃏 make Anki cards. |
+| **Blocked range** | Days with no studying at all: vacation, sick, study break, other (+ note). |
+| **Session** | One 2–3 h block (default 150 min). Up to 4 per day: `am1, am2` (morning) and `pm1, pm2` (afternoon). 1 session = `am1`; 2 = `am1, pm1`; 3 = `am1, am2, pm1`; 4 = all. |
+| **Plan item** | One thing to do in a session. Category (`kind`): **chapter**, **slides**, **mixed** (both) or **anki** (Anki review). |
+| **Session type** | **study** (Anki + chunk work) · **review** (Anki + short exam review right before an exam) · **anki** (Anki only, on days without study) |
+| **Slot kind** | **normal** (within preferred sessions/day) · **buffer** (the weekly catch-up half-day) · **extra** (above preferred, up to max) |
 
-`planWithEscalation(state, from)` tries, in order, and stops at the first
-plan that fits:
+### Anki is a category of work, like chapters and slide decks
+- Each study and review session **starts with an Anki review item**. It's a
+  normal item: listed with its minutes, ticked in the check-in.
+- Its length grows with the number of cards made so far: at least 10 min per
+  session, at most 30 % of a session.
+- It suggests which decks to review (subjects in that session first, then
+  exams in the next 14 days) and offers a copyable Anki search like
+  `(deck:"Biology*" OR deck:"Chemistry*") is:due` for a Filtered Deck.
+  Suggested deck naming in Anki: `Subject::Chunk title`.
+- **Days without study** (before the last exam, not blocked, not an exam day,
+  not the buffer) get a short **Anki-only session** (≥ 15 min), so reviews
+  never pause. Only once cards exist.
 
-| Level | What changes | Approval |
+## 4. Effort model
+
+Per chunk, before weight (all values are settings with these defaults):
+
+| Step | Pages | Slides |
+|---|---|---|
+| Read | 3 min / page | 1 min / slide |
+| Summary | 1 min / page | 0.5 min / slide |
+| Anki cards | 1.5 cards / page | 0.7 cards / slide |
+| Card creation | 1.5 min / card | |
+
+`effort = (read + summary + cards) × weight` → a 20-page chapter at weight 1.0
+≈ 125 min. Once the user enters the real card count it replaces the estimate.
+
+Anki review per day ≈ `cards made × 10 % due × 8 s`, split over the day's
+sessions, clamped to [10 min, 30 % of a session] per session.
+
+## 5. The planner
+
+Code: `packages/core/src/scheduler.ts`. Pure function: data in, plan out.
+
+1. **Slot grid** from the plan start to the last exam: skip blocked days, skip
+   the exam's half on exam day, mark extra slots, mark one buffer half-day per
+   week (fixed, or automatic = afternoon of the last day of the week, avoiding
+   exam days and days before an exam).
+2. **Reserve reviews first:** the last free slot before each exam (within 7
+   days) becomes a review session: 10 % of the subject's effort, at least
+   20 min, at most 60 % of a session. Done first so back-to-back exams each
+   get one.
+3. **Deadlines:** main study for a subject ends before its review session and
+   before `exam − examBufferDays` (default 2 days).
+4. **Fill slots in time order.** Each session gets its Anki item, then work.
+   The subject with the **least slack** (free capacity before its deadline −
+   remaining work) goes next, chunks in order. Within a session the planner
+   prefers to stay on one subject unless another is at risk. Limits: max chunks
+   per session; big chunks are split by max pages / max slides / what fits a
+   session; a piece that doesn't fit is cut to fill the session (no pieces
+   under 30 min; up to 10 min overrun allowed instead of a tiny leftover).
+   Consecutive pieces of the same chunk merge. Pieces are numbered
+   "Ch 4 (1/3)" in time order.
+5. **Pacing** (setting):
+   - `even` (default, "Steady"): a subject only takes a slot when it's behind
+     its steady pace to its finish date – or when time gets tight, then it's
+     as-soon-as-possible again. Study (and Anki) on most days.
+   - `early` ("Finish early"): fill everything as soon as possible.
+6. **Buffer and extra slots** are only used by subjects that wouldn't make it
+   otherwise; buffer before extra.
+7. **Anki-only sessions** on remaining free days (see §3).
+
+### Escalation – when it doesn't fit
+`planWithEscalation()` tries, in order, and stops at the first plan that fits:
+
+| Level | What changes | User sees |
 |---|---|---|
 | `normal` | preferred sessions only | applied automatically |
-| `shortenExamBuffer` | main study may end 1 day closer to the exam | asks |
-| `useWeeklyBuffer` | catch-up in the weekly buffer half-day | asks |
-| `extraSessions` | sessions above preferred, up to max | asks + warning |
-| `infeasible` | nothing fits: shows hours missing per subject | warning |
+| `shortenExamBuffer` | main study may end 1 day closer to exams | banner, asks |
+| `useWeeklyBuffer` | catch-up in the weekly buffer half-day | banner, asks |
+| `extraSessions` | sessions above preferred, up to max | red banner, asks |
+| `infeasible` | nothing fits: hours missing per subject + ideas | red banner |
 
-`checkInDay(chunks, plan, date, "yes" | "no", finished?)` applies the
-end-of-day check-in. Then the plan is rebuilt from the next day, and
-`diffPlans(old, new)` lists what moved ("Moved Ch. 3 to Wednesday").
+## 6. Approvals (never silently overbook)
 
-## End-of-day check-in
-- Web Push notification at a chosen time with **[Yes] [No]** buttons.
-- Yes → the day's work is done (saved in the background).
-- No → quick screen to tick what *was* done (e.g. read, but no cards yet).
-- Ignored → asked again next morning; after 2 days it counts as missed.
-- Buttons work on Android and desktop Chrome/Edge; on iPhone the app must be
-  added to the Home Screen and tapping opens the check-in screen.
+Code: `apps/web/src/planner.ts`.
+- The app always computes the full proposal, but **shows** the plan capped at
+  what the user approved (`planWithEscalation(…, maxLevel)`).
+- An approval stores the level, the exact buffer/extra slots and the exam
+  buffer. Later plans that need **only those or fewer** are accepted silently;
+  anything new asks again.
+- "Not now" hides the banner and shows a small "plan at risk" chip instead.
+- The same rules will apply to changes made by the AI assistant.
 
-## AI: free, and invisible for normal users
-- The app works fully without AI.
-- **Built-in assistant** ("Ask StudyMaster"): runs through our own server with
-  a server-side API key; no AI account needed. Provider is swappable (e.g.
-  Claude Haiku for cents per month, or a free tier). Per-user daily limit and
-  a monthly spend cap.
-- **MCP server**: the same tools (`add_chunks`, `add_blocked_days`, `replan`,
-  `log_progress`, `get_today`, …) for people who use their own Claude (works
-  on the free plan as one custom connector).
-- **Copy-paste prompts** for any other chatbot (import syllabus → JSON).
-- AI changes go through the same approval flow: it can never silently
-  overbook the user.
+## 7. Check-in & re-planning
 
-## Tech
+- **Yes** → everything planned that day counts as done (undo available).
+- **No** → a sheet to tick what *was* done: read / summary / cards per chunk
+  piece, "Done" for Anki items. Everything else goes back into the pool.
+- **Ignored** → shown again the next morning; the plan starts at most 2 days
+  back, so after 2 days unconfirmed work simply counts as not done.
+- After a check-in the plan is rebuilt from the next day and a short note
+  says what moved.
+- **Evening reminder** (needs the backend): a push notification at a chosen
+  time with **[Yes] [No]** buttons. Android and desktop Chrome/Edge show the
+  buttons; on iPhone the app must be on the Home Screen and a tap opens the
+  check-in. Ask for notification permission after the first day, not at setup.
+
+## 8. Dashboard (web app)
+
+- **Today:** greeting, today's sessions as cards, check-in card (prominent in
+  the evening), pending check-ins from previous days, tomorrow preview, exam
+  list with progress ring + days left + "on track / at risk", last 7 days.
+- **Plan:** week view (desktop 7 columns, phone list), overview heat map from
+  this week to the last exam with exam markers, exam list with "main study
+  done by", legend. Buffer = striped amber, extra = rose border, day off = grey.
+- **Subjects:** cards with progress, chunks, cards made / estimated; editor
+  with category icon per chunk, step toggles, real card count, reorder,
+  suggested Anki deck name.
+- **Settings:** study rhythm, pace, weekly buffer, evening check-in time,
+  days off, Anki, time estimates, data (export/import/start over).
+- Design: light and dark mode, mobile bottom tab bar, desktop sidebar,
+  rounded cards, subject colors, no clutter.
+
+## 9. Tech & architecture
+
 | Part | Choice |
 |---|---|
-| Planner | TypeScript, no dependencies, Vitest tests |
-| Web app | React 19 + Vite 6 + Tailwind 4 + zustand, installable PWA (hand-made UI components in `components/ui.tsx`) |
-| Backend | Cloudflare Workers (API + MCP + cron for check-ins) + D1 |
-| Login | Google or email magic link |
-
-## Roadmap
-1. ✅ `packages/core`: effort model with Anki, planner with reviews, buffers,
-   escalation and pacing, check-in, plan diff, validation, tests
-2. ✅ Web app (local-only): setup wizard, Today view with check-in card,
-   calendar with buffer blocks, progress and exam countdowns, approval banner,
-   backup export/import, offline PWA, dark mode
-3. **Anki on free days**: add a short Anki-only session (e.g. 15–20 min) on
-   days without study before the last exam, so reviews never pause. Probably a
-   new `PlannedSession.type: "anki"` produced in `planOnce`, shown on Today and
-   in the calendar, not part of the Yes/No check-in.
-4. **Backend** (Cloudflare Workers + D1, free tier):
-   - Login (email magic link or Google), one row of app data per user;
-     keep the local-first store and sync it (last write wins is fine at first).
-   - Web Push: store push subscriptions; a Cron Trigger every 15 min sends the
-     check-in to users whose `checkInTime` has come (in their timezone).
-   - Notification actions **Yes / No**: switch vite-plugin-pwa to
-     `injectManifest` and handle `notificationclick` in a custom service worker
-     (Yes → POST the check-in; No → open `/#today` with the check-in sheet).
-   - iPhone: push only works after "Add to Home Screen" – show a hint.
-5. **Built-in assistant** ("Ask StudyMaster"): Worker endpoint with a
-   server-side LLM key. Tools: `add_subject`, `add_chunks`, `add_blocked_days`,
-   `update_settings`, `get_today`, `get_schedule`, `log_progress`, `replan`,
-   `what_if`. Writes go through the same approval rules. Per-user daily limit
-   and a monthly spend cap.
-6. **MCP server** on the same Worker (`/mcp`, OAuth) exposing the same tools,
-   plus a "Connect to Claude" page with the 3 steps.
-7. **Import with AI**: a copy-paste prompt for any chatbot that returns JSON
-   for subjects and chunks, plus an import screen.
-
-Smaller ideas: drag a chunk to another day; keep the plan more stable between
-re-plans (today currently re-plans from scratch); `.ics` calendar export;
-"realistic pace" factor learned from check-ins; German translation; Playwright
-end-to-end tests.
+| Planner | `packages/core` – TypeScript, no dependencies, Vitest |
+| Web app | `apps/web` – React 19, Vite 6, Tailwind 4, zustand, vite-plugin-pwa; UI primitives in `components/ui.tsx` |
+| Storage today | localStorage on the device (`studymaster-v1`), backup as JSON |
+| Backend (planned) | Cloudflare Workers + D1 + Cron Triggers – see [HOSTING.md](HOSTING.md) |
+| AI (planned) | Built-in assistant + MCP server sharing one set of tools – see [AI.md](AI.md) |

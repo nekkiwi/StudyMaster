@@ -16,6 +16,7 @@ export function diffPlans(before: Plan, after: Plan): PlanChange[] {
     for (const session of plan.sessions) {
       if (session.date < after.from) continue;
       for (const item of session.items) {
+        if (item.kind === "anki") continue;
         let entry = map.get(item.chunkId);
         if (!entry) map.set(item.chunkId, (entry = { title: item.baseTitle, dates: new Set() }));
         entry.dates.add(session.date);

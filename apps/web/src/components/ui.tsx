@@ -60,13 +60,19 @@ export function SectionTitle({ children, action }: { children: ReactNode; action
   );
 }
 
-export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
+/**
+ * A labelled form field. Use `group` for button groups (Segmented, color
+ * swatches): a <label> around buttons would make a tap on the label text
+ * press the first button.
+ */
+export function Field({ label, hint, group, children }: { label: string; hint?: string; group?: boolean; children: ReactNode }) {
+  const Tag = group ? "div" : "label";
   return (
-    <label className="block">
+    <Tag className="block" {...(group ? { role: "group", "aria-label": label } : {})}>
       <span className="mb-1.5 block text-sm font-medium text-slate-700 dark:text-slate-300">{label}</span>
       {children}
       {hint && <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">{hint}</span>}
-    </label>
+    </Tag>
   );
 }
 

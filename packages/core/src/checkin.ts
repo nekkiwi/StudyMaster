@@ -25,17 +25,22 @@ export function itemsForDate(plan: Plan, date: ISODate): PlanItem[] {
 
 /** Adds finished work to the chunks. Returns new chunk objects; the input is not changed. */
 export function applyResults(chunks: Chunk[], results: ItemResult[]): Chunk[] {
-  const byId = new Map(chunks.map((c) => [c.id, { ...c, done: { ...c.done } }]));
+  const byId = new Map(chunks.map((c) => [c.id, c]));
+  const changed = new Map<string, Chunk & { done: Partial<Record<StepKey, number>> }>();
   for (const result of results) {
-    const chunk = byId.get(result.item.chunkId);
-    if (!chunk) continue;
+    // Anki items don't change chunk progress; they're only recorded.
+    if (result.item.kind === "anki") continue;
+    const original = byId.get(result.item.chunkId);
+    if (!original) continue;
+    let chunk = changed.get(original.id);
+    if (!chunk) changed.set(original.id, (chunk = { ...original, done: { ...original.done } }));
     const fraction = Math.min(1, Math.max(0, result.fraction ?? 1));
     for (const step of result.steps ?? STEPS) {
       const next = (chunk.done[step] ?? 0) + result.item.deltas[step] * fraction;
       chunk.done[step] = next > 0.999 ? 1 : Math.min(1, next);
     }
   }
-  return chunks.map((c) => byId.get(c.id)!);
+  return chunks.map((c) => changed.get(c.id) ?? c);
 }
 
 /**

@@ -5,7 +5,12 @@ with exam dates, their material (chapters with pages, slide decks with slides)
 and a difficulty weight; the app plans every study session, including Anki
 work, and re-plans after a daily Yes/No check-in.
 
-Read `docs/DESIGN.md` for the full design and the decisions behind it.
+Docs – read before bigger changes:
+- `docs/DESIGN.md` – product, data model, planner, check-in, dashboard
+- `docs/DECISIONS.md` – every decision with its reason (add new ones there)
+- `docs/ROADMAP.md` – what's done and what's next
+- `docs/HOSTING.md` – Cloudflare hosting, Android/iPhone, onboarding
+- `docs/AI.md` – built-in assistant, MCP connector, copy-paste import
 
 ## Commands
 
@@ -26,7 +31,7 @@ Run `npm test && npm run typecheck` before every commit. CI runs the same
 packages/core/   Planning engine. Pure TypeScript, no dependencies, no DOM.
   src/types.ts        Data model: Subject, Chunk, BlockedRange, Settings, Plan…
   src/effort.ts       Minutes per chunk (read + summary + Anki cards) × weight,
-                      splitting into pieces, Anki block size per session
+                      splitting into pieces, item categories, Anki item size per session
   src/slots.ts        Slot grid: sessions per day, blocked days, exam halves,
                       weekly buffer half-day, extra slots
   src/scheduler.ts    planOnce() and planWithEscalation() – the core algorithm
@@ -52,11 +57,13 @@ apps/web/        React 19 + Vite 6 + Tailwind 4 PWA (zustand for state)
    week = `buffer` (catch-up reserve, empty unless needed).
 2. Reserve a short review session in the last free slot before every exam
    (first, so back-to-back exams each get one).
-3. Walk slots in time order; each session = Anki block + work. The subject with
-   the least slack (capacity before its deadline − remaining work) goes first.
+3. Walk slots in time order; each session = an Anki review item + work items.
+   Items have a category (`kind`): chapter, slides, mixed, anki. The subject
+   with the least slack (capacity before its deadline − remaining work) goes first.
    `pacing: "even"` (default) only takes a slot when the subject is behind its
    steady pace or time is tight; `"early"` fills everything ASAP.
-4. `planWithEscalation` tries: normal → shorter exam buffer → weekly buffer →
+4. Days without study get a short Anki-only session (`type: "anki"`).
+5. `planWithEscalation` tries: normal → shorter exam buffer → weekly buffer →
    extra sessions → infeasible. Everything after "normal" needs user approval.
    The web app shows the approved plan and a banner with the stronger proposal.
 
@@ -76,15 +83,13 @@ apps/web/        React 19 + Vite 6 + Tailwind 4 PWA (zustand for state)
 
 ## Status
 
-Done: planner (with Anki, reviews, buffer, escalation, pacing), web app
-(wizard, Today with check-in, calendar, subjects, settings, approval banner,
-backup export/import, offline PWA, dark mode).
+Done: planner (Anki as item category + Anki-only days, reviews, buffer,
+escalation, pacing), web app (wizard, Today with check-in, calendar,
+subjects, settings, approval banner, backup, offline PWA, dark mode).
 
-Next steps, in order – details in `docs/DESIGN.md` → Roadmap:
-1. Short Anki-only sessions on free days (so reviews never pause)
-2. Backend on Cloudflare Workers + D1: login, sync, cron + Web Push evening
-   check-in with Yes/No buttons (needs vite-plugin-pwa `injectManifest` mode
-   for a custom service worker)
-3. Built-in assistant via the backend (server-side key, per-user limit, spend cap)
-4. MCP server (same tools as the assistant) + "Connect to Claude" page
-5. "Import with AI": copy-paste prompt → JSON → import
+Next: see `docs/ROADMAP.md` – deploy to Cloudflare Pages with an
+"Install app" button, then the backend (login, sync, push check-ins), the
+built-in assistant, the MCP server and "Import with AI".
+
+When you make a design decision, add it to `docs/DECISIONS.md` and keep
+`docs/DESIGN.md` / `docs/ROADMAP.md` in sync.

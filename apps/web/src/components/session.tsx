@@ -1,22 +1,33 @@
-import type { PlannedSession, Subject } from "@studymaster/core";
-import { BookOpen, Brain, Copy, Layers, NotebookPen, RotateCcw } from "lucide-react";
+import { sessionMinutes, type ItemKind, type PlannedSession, type PlanItem, type Subject } from "@studymaster/core";
+import { BookOpen, Copy, Files, Layers, Presentation, RotateCcw } from "lucide-react";
 import { formatMinutes, SLOT_LABEL } from "../lib/format";
 import { toast } from "./toast";
 import { Badge, cx, SubjectDot } from "./ui";
 
-/** Anki search for the decks worth reviewing in this session. */
-export function ankiSearch(decks: string[]): string {
-  const unique = [...new Set(decks)];
+export const KIND_ICON: Record<ItemKind, typeof BookOpen> = {
+  chapter: BookOpen,
+  slides: Presentation,
+  mixed: Files,
+  anki: Layers,
+};
+
+export const KIND_LABEL: Record<ItemKind, string> = {
+  chapter: "Chapter",
+  slides: "Slide deck",
+  mixed: "Chapter + slides",
+  anki: "Anki review",
+};
+
+/** Anki search for the decks worth reviewing. */
+export function ankiSearch(deckNames: string[]): string {
+  const unique = [...new Set(deckNames)].filter(Boolean);
   if (unique.length === 0) return "is:due";
   const parts = unique.map((d) => `deck:"${d}*"`);
   return `${parts.length > 1 ? `(${parts.join(" OR ")})` : parts[0]} is:due`;
 }
 
-export function sessionDecks(session: PlannedSession, subjects: Map<string, Subject>, focus: Subject[]): string[] {
-  const names = session.items.map((i) => subjects.get(i.subjectId)?.name).filter(Boolean) as string[];
-  if (session.reviewSubjectId) names.unshift(subjects.get(session.reviewSubjectId)?.name ?? "");
-  for (const s of focus) names.push(s.name);
-  return names.filter(Boolean).slice(0, 3);
+export function deckNames(item: PlanItem, subjects: Map<string, Subject>): string[] {
+  return (item.decks ?? []).map((id) => subjects.get(id)?.name ?? "").filter(Boolean);
 }
 
 async function copy(text: string) {
@@ -28,21 +39,23 @@ async function copy(text: string) {
   }
 }
 
+const SESSION_BADGE: Record<PlannedSession["type"], { label: string; tone: "indigo" | "slate" } | null> = {
+  study: null,
+  review: { label: "Exam review", tone: "indigo" },
+  anki: { label: "Anki only", tone: "slate" },
+};
+
 export function SessionCard({
   session,
   subjects,
-  focus,
   compact,
 }: {
   session: PlannedSession;
   subjects: Map<string, Subject>;
-  /** Subjects with an exam coming up: their decks are suggested too. */
-  focus: Subject[];
   compact?: boolean;
 }) {
-  const total = session.ankiMinutes + session.items.reduce((a, i) => a + i.minutes, 0) + (session.reviewMinutes ?? 0);
-  const search = ankiSearch(sessionDecks(session, subjects, focus));
   const reviewSubject = session.reviewSubjectId ? subjects.get(session.reviewSubjectId) : undefined;
+  const badge = SESSION_BADGE[session.type];
 
   return (
     <div
@@ -58,27 +71,19 @@ export function SessionCard({
           <span className="text-sm font-semibold">{SLOT_LABEL[session.slot]}</span>
           {session.kind === "buffer" && <Badge tone="amber">Buffer · catch-up</Badge>}
           {session.kind === "extra" && <Badge tone="rose">Extra session</Badge>}
-          {session.type === "review" && <Badge tone="indigo">Exam review</Badge>}
+          {badge && <Badge tone={badge.tone}>{badge.label}</Badge>}
         </div>
-        <span className="text-xs text-slate-500 tabular-nums dark:text-slate-400">{formatMinutes(total)}</span>
+        <span className="text-xs text-slate-500 tabular-nums dark:text-slate-400">{formatMinutes(sessionMinutes(session))}</span>
       </div>
 
       <ul className="space-y-1 px-2 py-2">
-        <li className="flex items-center gap-3 rounded-xl px-2 py-1.5">
-          <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400">
-            <Layers size={16} />
-          </span>
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-medium">Anki review</p>
-            {!compact && <p className="truncate font-mono text-xs text-slate-500 dark:text-slate-400">{search}</p>}
-          </div>
-          <span className="text-xs text-slate-500 tabular-nums">{formatMinutes(session.ankiMinutes)}</span>
-          {!compact && (
-            <button onClick={() => copy(search)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800" aria-label="Copy Anki search">
-              <Copy size={15} />
-            </button>
-          )}
-        </li>
+        {session.items.map((item) =>
+          item.kind === "anki" ? (
+            <AnkiRow key={item.chunkId} item={item} subjects={subjects} compact={compact} />
+          ) : (
+            <ChunkRow key={`${item.chunkId}-${item.part}`} item={item} subject={subjects.get(item.subjectId)} compact={compact} />
+          ),
+        )}
 
         {reviewSubject && (
           <li className="flex items-center gap-3 rounded-xl px-2 py-1.5">
@@ -92,34 +97,59 @@ export function SessionCard({
             <span className="text-xs text-slate-500 tabular-nums">{formatMinutes(session.reviewMinutes ?? 0)}</span>
           </li>
         )}
-
-        {session.items.map((item) => {
-          const subject = subjects.get(item.subjectId);
-          return (
-            <li key={`${item.chunkId}-${item.part}`} className="flex items-center gap-3 rounded-xl px-2 py-1.5">
-              <span
-                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-                style={{ background: `${subject?.color ?? "#94a3b8"}1f`, color: subject?.color }}
-              >
-                <BookOpen size={16} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-medium">{item.title}</p>
-                <p className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-                  <SubjectDot color={subject?.color} className="h-1.5 w-1.5" />
-                  {subject?.name}
-                  {!compact && (
-                    <span className="ml-1 inline-flex items-center gap-1 text-slate-400">
-                      <BookOpen size={11} /> <NotebookPen size={11} /> <Brain size={11} /> ~{item.cards} cards
-                    </span>
-                  )}
-                </p>
-              </div>
-              <span className="text-xs text-slate-500 tabular-nums">{formatMinutes(item.minutes)}</span>
-            </li>
-          );
-        })}
       </ul>
     </div>
+  );
+}
+
+function AnkiRow({ item, subjects, compact }: { item: PlanItem; subjects: Map<string, Subject>; compact?: boolean }) {
+  const names = deckNames(item, subjects);
+  const search = ankiSearch(names);
+  return (
+    <li className="flex items-center gap-3 rounded-xl px-2 py-1.5">
+      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400">
+        <Layers size={16} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-medium">Anki review</p>
+        <p className="truncate text-xs text-slate-500 dark:text-slate-400">
+          {compact ? names.join(", ") : <span className="font-mono">{search}</span>}
+        </p>
+      </div>
+      <span className="text-xs text-slate-500 tabular-nums">{formatMinutes(item.minutes)}</span>
+      {!compact && (
+        <button onClick={() => copy(search)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800" aria-label="Copy Anki search">
+          <Copy size={15} />
+        </button>
+      )}
+    </li>
+  );
+}
+
+function ChunkRow({ item, subject, compact }: { item: PlanItem; subject?: Subject; compact?: boolean }) {
+  const Icon = KIND_ICON[item.kind];
+  return (
+    <li className="flex items-center gap-3 rounded-xl px-2 py-1.5">
+      <span
+        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+        style={{ background: `${subject?.color ?? "#94a3b8"}1f`, color: subject?.color }}
+        title={KIND_LABEL[item.kind]}
+      >
+        <Icon size={16} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{item.title}</p>
+        <p className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+          <SubjectDot color={subject?.color} className="h-1.5 w-1.5" />
+          {subject?.name}
+          {!compact && (
+            <span className="text-slate-400">
+              · {KIND_LABEL[item.kind].toLowerCase()} · read, summary, ~{item.cards} cards
+            </span>
+          )}
+        </p>
+      </div>
+      <span className="text-xs text-slate-500 tabular-nums">{formatMinutes(item.minutes)}</span>
+    </li>
   );
 }

@@ -1,18 +1,14 @@
-import { addDays, daysBetween, eachDay, weekKey, fromDayNumber, type ISODate, type PlannedSession, type Subject } from "@studymaster/core";
-import { ChevronLeft, ChevronRight, GraduationCap, Palmtree } from "lucide-react";
+import { addDays, daysBetween, eachDay, weekKey, fromDayNumber, sessionMinutes, type ISODate, type Subject } from "@studymaster/core";
+import { ChevronLeft, ChevronRight, GraduationCap, Layers, Palmtree } from "lucide-react";
 import { useMemo, useState } from "react";
 import { ProposalBanner } from "../components/proposal";
-import { SessionCard } from "../components/session";
+import { KIND_ICON, SessionCard } from "../components/session";
 import { Badge, Button, Card, cx, Modal, SectionTitle, SubjectDot } from "../components/ui";
 import { formatDay, formatMinutes, formatShort, SLOT_LABEL, weekdayShort } from "../lib/format";
 import type { Planner } from "../planner";
 import { useStore } from "../store";
 
 const BLOCK_LABEL = { vacation: "Vacation", sick: "Sick", break: "Break", other: "Off" };
-
-function sessionMinutes(s: PlannedSession): number {
-  return s.ankiMinutes + (s.reviewMinutes ?? 0) + s.items.reduce((a, i) => a + i.minutes, 0);
-}
 
 export function PlanView({ planner }: { planner: Planner }) {
   const { today, shown, state } = planner;
@@ -61,7 +57,7 @@ export function PlanView({ planner }: { planner: Planner }) {
             {shown.plan.sessions
               .filter((s) => s.date === openDay)
               .map((s) => (
-                <SessionCard key={s.slot} session={s} subjects={subjects} focus={[]} />
+                <SessionCard key={s.slot} session={s} subjects={subjects} />
               ))}
             {shown.plan.sessions.every((s) => s.date !== openDay) && (
               <p className="text-sm text-slate-500">Nothing planned on this day.</p>
@@ -146,17 +142,26 @@ function DayColumn({
               {SLOT_LABEL[s.slot]}
               {s.kind === "extra" && " · extra"}
             </p>
-            {s.type === "review" ? (
-              <p className="flex items-center gap-1.5 text-xs font-medium">
-                <SubjectDot color={subjects.get(s.reviewSubjectId!)?.color} /> Review {subjects.get(s.reviewSubjectId!)?.name}
-              </p>
-            ) : (
-              s.items.map((i) => (
+            {s.items.map((i) => {
+              if (i.kind === "anki") {
+                return (
+                  <p key={i.chunkId} className="flex items-center gap-1.5 truncate text-xs text-sky-700 dark:text-sky-300">
+                    <Layers size={11} className="shrink-0" /> <span className="truncate">Anki {i.minutes}′</span>
+                  </p>
+                );
+              }
+              const Icon = KIND_ICON[i.kind];
+              return (
                 <p key={`${i.chunkId}-${i.part}`} className="flex items-center gap-1.5 truncate text-xs">
-                  <SubjectDot color={subjects.get(i.subjectId)?.color} className="h-2 w-2" />
+                  <Icon size={11} className="shrink-0" style={{ color: subjects.get(i.subjectId)?.color }} />
                   <span className="truncate">{i.title}</span>
                 </p>
-              ))
+              );
+            })}
+            {s.type === "review" && (
+              <p className="flex items-center gap-1.5 text-xs font-medium">
+                <SubjectDot color={subjects.get(s.reviewSubjectId!)?.color} className="h-2 w-2" /> Review {subjects.get(s.reviewSubjectId!)?.name}
+              </p>
             )}
           </div>
         ))}

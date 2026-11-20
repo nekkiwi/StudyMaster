@@ -1,5 +1,5 @@
 import { itemsForDate, type ISODate, type ItemResult, type PlanItem, type StepKey, type Subject } from "@studymaster/core";
-import { BookOpen, Brain, Check, NotebookPen, X } from "lucide-react";
+import { BookOpen, Brain, Check, Layers, NotebookPen, X } from "lucide-react";
 import { useState } from "react";
 import { formatLongDay, formatMinutes, relativeDays } from "../lib/format";
 import type { Planner } from "../planner";
@@ -50,7 +50,7 @@ export function CheckInCard({
         </p>
         <h3 className="mt-1 text-lg font-semibold">{question}</h3>
         <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">
-          {items.map((i) => i.title).join(" · ")}
+          {[...new Set(items.map((i) => i.title))].join(" · ")}
         </p>
         <div className="mt-4 grid grid-cols-2 gap-2">
           <Button variant="success" size="lg" onClick={onYes}>
@@ -109,7 +109,7 @@ function PartialCheckIn({
     onSave(
       items
         .filter((i) => (done[key(i)] ?? []).length > 0)
-        .map((item) => ({ item, steps: done[key(item)] })),
+        .map((item) => (item.kind === "anki" ? { item } : { item, steps: done[key(item)] })),
     );
 
   return (
@@ -133,6 +133,29 @@ function PartialCheckIn({
         {items.map((item) => {
           const subject = subjects.get(item.subjectId);
           const steps = done[key(item)] ?? [];
+          if (item.kind === "anki") {
+            const on = steps.length > 0;
+            return (
+              <li key={key(item)} className="flex items-center gap-3 rounded-2xl border border-slate-200 p-3 dark:border-slate-800">
+                <Layers size={16} className="text-sky-600 dark:text-sky-400" />
+                <span className="flex-1 text-sm font-medium">Anki review</span>
+                <span className="text-xs text-slate-500">{formatMinutes(item.minutes)}</span>
+                <button
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => toggle(item, "read")}
+                  className={cx(
+                    "flex items-center gap-1.5 rounded-xl border px-3 py-1.5 text-sm font-medium transition",
+                    on
+                      ? "border-emerald-500 bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300"
+                      : "border-slate-200 text-slate-500 hover:border-slate-300 dark:border-slate-700",
+                  )}
+                >
+                  <Check size={15} /> Done
+                </button>
+              </li>
+            );
+          }
           return (
             <li key={key(item)} className="rounded-2xl border border-slate-200 p-3 dark:border-slate-800">
               <div className="flex items-center gap-2">
