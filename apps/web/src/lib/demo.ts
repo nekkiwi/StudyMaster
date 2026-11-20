@@ -8,15 +8,17 @@ export function demoData(today: ISODate): { subjects: Subject[]; chunks: Chunk[]
     { id: "chem", name: "Chemistry", color: SUBJECT_COLORS[0], weight: 1.5, examDate: addDays(today, 25), examHalf: "pm" },
     { id: "psy", name: "Psychology", color: SUBJECT_COLORS[3], weight: 0.8, examDate: addDays(today, 29) },
   ];
+  // Lectures: a 60–90 min recording plus the slide deck or script.
+  // Psychology is learned from the book only (no recordings).
   const chunks: Chunk[] = [
     ...Array.from({ length: 8 }, (_, i): Chunk => ({
-      id: `bio-${i + 1}`, subjectId: "bio", title: `Ch ${i + 1}`, pages: 18 + i * 2, slides: 0, order: i + 1,
+      id: `bio-${i + 1}`, subjectId: "bio", title: `Lecture ${i + 1}`, recordingMinutes: 90, pages: 0, slides: 35 + i * 3, order: i + 1,
     })),
     ...Array.from({ length: 6 }, (_, i): Chunk => ({
-      id: `chem-${i + 1}`, subjectId: "chem", title: `Lecture ${i + 1}`, pages: 0, slides: 40 + i * 5, order: i + 1,
+      id: `chem-${i + 1}`, subjectId: "chem", title: `Lecture ${i + 1}`, recordingMinutes: 60, pages: 12 + i, slides: 25, order: i + 1,
     })),
     ...Array.from({ length: 5 }, (_, i): Chunk => ({
-      id: `psy-${i + 1}`, subjectId: "psy", title: `Ch ${i + 1} + slides`, pages: 25, slides: 30, order: i + 1,
+      id: `psy-${i + 1}`, subjectId: "psy", title: `Ch ${i + 1}`, pages: 24 + i * 2, slides: 0, order: i + 1,
     })),
   ];
   const blocked: BlockedRange[] = [

@@ -17,8 +17,9 @@ keeps the plan honest as real life happens.
    account needed to start.
 2. **Works everywhere.** Browser on desktop and phone, installable as an app on
    Android (and iPhone), usable from any device once sync exists.
-3. **Plans the real work.** Studying is not just reading: it's reading,
-   summarizing, making Anki cards and reviewing Anki every day.
+3. **Plans the real work.** Studying a lecture means watching the recording,
+   reading the slides or chapter and writing Anki cards – and then studying
+   those cards plus the earlier ones every day.
 4. **Plans well in advance.** Main study ends before exams; a short review
    sits right before each exam, even when exams are back to back.
 5. **Adapts, but never silently overbooks.** Missed days are re-planned
@@ -31,16 +32,17 @@ keeps the plan honest as real life happens.
 
 **First time (onboarding)** – a 5-step wizard, about 5 minutes:
 1. *Exams:* subjects with exam date, morning/afternoon, difficulty weight.
-2. *Material:* chapters and slide decks with page/slide counts. Quick entry
-   like `Ch 1-8: 22, 18, 30, …` or `Lecture 3: 45 slides`.
+2. *Material:* lectures with recording length plus slide deck and/or
+   chapter (pages, slides). Quick entry like `Lecture 1-8: 40, 35, …` (with a
+   "recording per lecture" default) or `Lecture 3: 45 slides 90min`.
 3. *Your week:* sessions per day (preferred and max), session length, pace,
    chunk limits, weekly buffer.
 4. *Days off:* vacation, breaks, other blocked days.
 5. *Your plan:* summary – total hours, sessions, whether everything fits.
 "Try with example data" skips all of this for a quick look.
 
-**Every day** – open *Today*: the day's sessions, each a list of items
-(Anki review, chapter pieces, slide decks). In the evening: *Did you finish
+**Every day** – open *Today*: the day's sessions, each a list of items:
+lecture pieces (🎬 watch · 📖 read · ✍️ write cards) and, at the end, 🃏 Anki. In the evening: *Did you finish
 today's plan?* **Yes / No**.
 
 **When life happens** – a "No", a sick day added, a new chapter: the plan
@@ -55,22 +57,25 @@ All types live in `packages/core/src/types.ts`.
 |---|---|
 | **Subject** | Name, color, exam date, exam half (`am`/`pm`), **weight** |
 | **Weight** | Preset difficulty: `0.5` very easy · `0.8` easy · `1.0` normal · `1.2` hard · `1.5` very hard. Multiplies all effort. |
-| **Chunk** | One unit of material: a chapter (`pages`), a slide deck (`slides`) or both. Has an order within its subject, optional real card count, and progress per step (`done.read/summary/cards`, 0–1). |
-| **Steps** | Every chunk is worked through as 📖 read → 📝 summarize → 🃏 make Anki cards. |
+| **Chunk** | One unit of material, usually **a lecture**: a recording (`recordingMinutes`, default 60) plus a chapter (`pages`) and/or slide deck (`slides`). Has an order within its subject, optional real card count, and progress per step (`done.watch/read/cards`, 0–1). |
+| **Steps** | Every chunk is worked through in order: 🎬 **watch** the recording → 📖 **read** the chapter / slides → ✍️ **write** Anki cards. |
 | **Blocked range** | Days with no studying at all: vacation, sick, study break, other (+ note). |
 | **Session** | One 2–3 h block (default 150 min). Up to 4 per day: `am1, am2` (morning) and `pm1, pm2` (afternoon). 1 session = `am1`; 2 = `am1, pm1`; 3 = `am1, am2, pm1`; 4 = all. |
-| **Plan item** | One thing to do in a session. Category (`kind`): **chapter**, **slides**, **mixed** (both) or **anki** (Anki review). |
-| **Session type** | **study** (Anki + chunk work) · **review** (Anki + short exam review right before an exam) · **anki** (Anki only, on days without study) |
+| **Plan item** | One thing to do in a session. Category (`kind`): **chapter**, **slides**, **mixed** (both), **recording** (video only) or **anki** (studying cards). Lecture pieces carry minutes per step, pages/slides and cards for that piece. |
+| **Session type** | **study** (lecture work, then Anki) · **review** (Anki for the subject + short exam review right before an exam) · **anki** (Anki only, on days without study) |
 | **Slot kind** | **normal** (within preferred sessions/day) · **buffer** (the weekly catch-up half-day) · **extra** (above preferred, up to max) |
 
-### Anki is a category of work, like chapters and slide decks
-- Each study and review session **starts with an Anki review item**. It's a
-  normal item: listed with its minutes, ticked in the check-in.
-- Its length grows with the number of cards made so far: at least 10 min per
-  session, at most 30 % of a session.
-- It suggests which decks to review (subjects in that session first, then
-  exams in the next 14 days) and offers a copyable Anki search like
-  `(deck:"Biology*" OR deck:"Chemistry*") is:due` for a Filtered Deck.
+### Studying Anki is its own item, at the end of each session
+The real workflow: A) watch → read → write cards, then B) study Anki.
+- Each study session **ends with an Anki item**: **learn the new cards**
+  written in that session (≈ 30 s per card) **+ review earlier cards of the
+  same subjects** (the decks of the subjects worked on in that session).
+- Review time grows with the number of cards made so far: at least 10 min per
+  session, at most 30 % of a session. Learning time comes on top and is
+  reserved when the lecture piece is planned, so sessions don't overflow.
+- It's a normal item: listed with its minutes, ticked in the check-in
+  ("Done"). A copyable Anki search for a Filtered Deck, e.g.
+  `(deck:"Chemistry*" OR deck:"Biology*") (is:due OR is:new)`.
   Suggested deck naming in Anki: `Subject::Chunk title`.
 - **Days without study** (before the last exam, not blocked, not an exam day,
   not the buffer) get a short **Anki-only session** (≥ 15 min), so reviews
@@ -78,19 +83,19 @@ All types live in `packages/core/src/types.ts`.
 
 ## 4. Effort model
 
-Per chunk, before weight (all values are settings with these defaults):
+Per chunk (all values are settings with these defaults):
 
-| Step | Pages | Slides |
-|---|---|---|
-| Read | 3 min / page | 1 min / slide |
-| Summary | 1 min / page | 0.5 min / slide |
-| Anki cards | 1.5 cards / page | 0.7 cards / slide |
-| Card creation | 1.5 min / card | |
+| Step | Time |
+|---|---|
+| 🎬 Watch | recording minutes × `recordingFactor` (1 = real time, 0.8 = 1.25× speed, 1.2 = with pauses) – **not** scaled by weight |
+| 📖 Read | (3 min / page + 1 min / slide) × weight |
+| ✍️ Write cards | cards × 1.5 min × weight; cards ≈ 1.5 / page + 0.7 / slide (or the real count) |
+| 🃏 Learn new cards | cards × 30 s – planned in the session's Anki item |
 
-`effort = (read + summary + cards) × weight` → a 20-page chapter at weight 1.0
-≈ 125 min. Once the user enters the real card count it replaces the estimate.
+Example: a lecture with a 60-min recording and 40 slides at weight 1.0 ≈
+60 + 40 + 28 cards × 1.5 = 142 min, plus 14 min learning the new cards.
 
-Anki review per day ≈ `cards made × 10 % due × 8 s`, split over the day's
+Anki reviews per day ≈ `cards made × 10 % due × 8 s`, split over the day's
 sessions, clamped to [10 min, 30 % of a session] per session.
 
 ## 5. The planner
@@ -107,13 +112,17 @@ Code: `packages/core/src/scheduler.ts`. Pure function: data in, plan out.
    get one.
 3. **Deadlines:** main study for a subject ends before its review session and
    before `exam − examBufferDays` (default 2 days).
-4. **Fill slots in time order.** Each session gets its Anki item, then work.
+4. **Fill slots in time order.** Each session gets lecture work, then its
+   Anki item (learn new + review).
    The subject with the **least slack** (free capacity before its deadline −
    remaining work) goes next, chunks in order. Within a session the planner
    prefers to stay on one subject unless another is at risk. Limits: max chunks
    per session; big chunks are split by max pages / max slides / what fits a
    session; a piece that doesn't fit is cut to fill the session (no pieces
    under 30 min; up to 10 min overrun allowed instead of a tiny leftover).
+   **Pieces follow the step order**: e.g. piece 1 = watch + start reading,
+   piece 2 = finish reading + write cards – cards are never planned before
+   the recording is watched.
    Consecutive pieces of the same chunk merge. Pieces are numbered
    "Ch 4 (1/3)" in time order.
 5. **Pacing** (setting):
@@ -150,8 +159,8 @@ Code: `apps/web/src/planner.ts`.
 ## 7. Check-in & re-planning
 
 - **Yes** → everything planned that day counts as done (undo available).
-- **No** → a sheet to tick what *was* done: read / summary / cards per chunk
-  piece, "Done" for Anki items. Everything else goes back into the pool.
+- **No** → a sheet to tick what *was* done: watched / read / cards written
+  per lecture piece (only the steps planned in that piece), "Done" for Anki. Everything else goes back into the pool.
 - **Ignored** → shown again the next morning; the plan starts at most 2 days
   back, so after 2 days unconfirmed work simply counts as not done.
 - After a check-in the plan is rebuilt from the next day and a short note

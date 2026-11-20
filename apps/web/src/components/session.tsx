@@ -1,5 +1,5 @@
 import { sessionMinutes, type ItemKind, type PlannedSession, type PlanItem, type Subject } from "@studymaster/core";
-import { BookOpen, Copy, Files, Layers, Presentation, RotateCcw } from "lucide-react";
+import { BookOpen, Copy, Files, Layers, PenLine, Presentation, RotateCcw, Video } from "lucide-react";
 import { formatMinutes, SLOT_LABEL } from "../lib/format";
 import { toast } from "./toast";
 import { Badge, cx, SubjectDot } from "./ui";
@@ -8,6 +8,7 @@ export const KIND_ICON: Record<ItemKind, typeof BookOpen> = {
   chapter: BookOpen,
   slides: Presentation,
   mixed: Files,
+  recording: Video,
   anki: Layers,
 };
 
@@ -15,15 +16,17 @@ export const KIND_LABEL: Record<ItemKind, string> = {
   chapter: "Chapter",
   slides: "Slide deck",
   mixed: "Chapter + slides",
-  anki: "Anki review",
+  recording: "Recording",
+  anki: "Anki",
 };
 
-/** Anki search for the decks worth reviewing. */
-export function ankiSearch(deckNames: string[]): string {
+/** Anki search for these decks: due cards, plus new ones after writing cards. */
+export function ankiSearch(deckNames: string[], withNew = false): string {
   const unique = [...new Set(deckNames)].filter(Boolean);
-  if (unique.length === 0) return "is:due";
+  const which = withNew ? "(is:due OR is:new)" : "is:due";
+  if (unique.length === 0) return which;
   const parts = unique.map((d) => `deck:"${d}*"`);
-  return `${parts.length > 1 ? `(${parts.join(" OR ")})` : parts[0]} is:due`;
+  return `${parts.length > 1 ? `(${parts.join(" OR ")})` : parts[0]} ${which}`;
 }
 
 export function deckNames(item: PlanItem, subjects: Map<string, Subject>): string[] {
@@ -92,7 +95,7 @@ export function SessionCard({
             </span>
             <div className="min-w-0 flex-1">
               <p className="text-sm font-medium">Review {reviewSubject.name}</p>
-              {!compact && <p className="text-xs text-slate-500 dark:text-slate-400">Whole Anki deck + skim your summaries</p>}
+              {!compact && <p className="text-xs text-slate-500 dark:text-slate-400">Whole Anki deck + skim the slides and notes</p>}
             </div>
             <span className="text-xs text-slate-500 tabular-nums">{formatMinutes(session.reviewMinutes ?? 0)}</span>
           </li>
@@ -104,17 +107,21 @@ export function SessionCard({
 
 function AnkiRow({ item, subjects, compact }: { item: PlanItem; subjects: Map<string, Subject>; compact?: boolean }) {
   const names = deckNames(item, subjects);
-  const search = ankiSearch(names);
+  const newCards = item.anki?.newCards ?? 0;
+  const search = ankiSearch(names, newCards > 0);
+  const what =
+    newCards > 0
+      ? `Learn ~${newCards} new cards + review ${names.join(", ")}`
+      : `Review ${names.join(", ") || "due cards"}`;
   return (
     <li className="flex items-center gap-3 rounded-xl px-2 py-1.5">
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400">
         <Layers size={16} />
       </span>
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-medium">Anki review</p>
-        <p className="truncate text-xs text-slate-500 dark:text-slate-400">
-          {compact ? names.join(", ") : <span className="font-mono">{search}</span>}
-        </p>
+        <p className="text-sm font-medium">Anki</p>
+        <p className="truncate text-xs text-slate-500 dark:text-slate-400">{what}</p>
+        {!compact && <p className="truncate font-mono text-[11px] text-slate-400">{search}</p>}
       </div>
       <span className="text-xs text-slate-500 tabular-nums">{formatMinutes(item.minutes)}</span>
       {!compact && (
@@ -123,6 +130,26 @@ function AnkiRow({ item, subjects, compact }: { item: PlanItem; subjects: Map<st
         </button>
       )}
     </li>
+  );
+}
+
+/** "🎬 60 min · 📖 12 pages · ✍️ ~14 cards" for one piece of a lecture. */
+export function StepChips({ item }: { item: PlanItem }) {
+  const chips: { icon: typeof Video; text: string }[] = [];
+  if (item.steps.watch > 0) chips.push({ icon: Video, text: formatMinutes(item.steps.watch) });
+  if (item.steps.read > 0) {
+    const what = [item.pages > 0 && `${item.pages} pages`, item.slides > 0 && `${item.slides} slides`].filter(Boolean).join(" + ");
+    chips.push({ icon: BookOpen, text: what || formatMinutes(item.steps.read) });
+  }
+  if (item.steps.cards > 0) chips.push({ icon: PenLine, text: `~${item.cards} cards` });
+  return (
+    <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5">
+      {chips.map(({ icon: Icon, text }) => (
+        <span key={text} className="inline-flex items-center gap-1 whitespace-nowrap">
+          <Icon size={11} /> {text}
+        </span>
+      ))}
+    </span>
   );
 }
 
@@ -139,12 +166,14 @@ function ChunkRow({ item, subject, compact }: { item: PlanItem; subject?: Subjec
       </span>
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{item.title}</p>
-        <p className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-          <SubjectDot color={subject?.color} className="h-1.5 w-1.5" />
-          {subject?.name}
+        <p className="flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500 dark:text-slate-400">
+          <span className="inline-flex items-center gap-1.5">
+            <SubjectDot color={subject?.color} className="h-1.5 w-1.5" />
+            {subject?.name}
+          </span>
           {!compact && (
             <span className="text-slate-400">
-              · {KIND_LABEL[item.kind].toLowerCase()} · read, summary, ~{item.cards} cards
+              <StepChips item={item} />
             </span>
           )}
         </p>

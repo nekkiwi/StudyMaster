@@ -1,17 +1,12 @@
 import { itemsForDate, type ISODate, type ItemResult, type PlanItem, type StepKey, type Subject } from "@studymaster/core";
-import { BookOpen, Brain, Check, Layers, NotebookPen, X } from "lucide-react";
+import { Check, Layers, X } from "lucide-react";
 import { useState } from "react";
 import { formatLongDay, formatMinutes, relativeDays } from "../lib/format";
 import type { Planner } from "../planner";
 import { useStore } from "../store";
 import { toast } from "./toast";
+import { STEP_META } from "./steps";
 import { Button, Card, cx, Modal, SubjectDot } from "./ui";
-
-const STEP_INFO: { key: StepKey; label: string; icon: typeof BookOpen }[] = [
-  { key: "read", label: "Read", icon: BookOpen },
-  { key: "summary", label: "Summary", icon: NotebookPen },
-  { key: "cards", label: "Cards", icon: Brain },
-];
 
 function recordItems(items: PlanItem[], done: (item: PlanItem) => boolean) {
   return items.map((i) => ({ title: i.title, subjectId: i.subjectId, minutes: i.minutes, done: done(i) }));
@@ -138,7 +133,7 @@ function PartialCheckIn({
             return (
               <li key={key(item)} className="flex items-center gap-3 rounded-2xl border border-slate-200 p-3 dark:border-slate-800">
                 <Layers size={16} className="text-sky-600 dark:text-sky-400" />
-                <span className="flex-1 text-sm font-medium">Anki review</span>
+                <span className="flex-1 text-sm font-medium">Anki</span>
                 <span className="text-xs text-slate-500">{formatMinutes(item.minutes)}</span>
                 <button
                   type="button"
@@ -164,7 +159,7 @@ function PartialCheckIn({
                 <span className="text-xs text-slate-500">{formatMinutes(item.minutes)}</span>
               </div>
               <div className="mt-2 grid grid-cols-3 gap-2">
-                {STEP_INFO.map(({ key: step, label, icon: Icon }) => {
+                {STEP_META.filter(({ key: step }) => item.steps[step] > 0).map(({ key: step, done: label, icon: Icon }) => {
                   const on = steps.includes(step);
                   return (
                     <button

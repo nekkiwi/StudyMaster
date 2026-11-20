@@ -5,17 +5,17 @@ import {
   totalMinutes,
   WEIGHTS,
   type Chunk,
-  type StepKey,
   type Subject,
   type Weight,
 } from "@studymaster/core";
-import { ArrowDown, ArrowUp, BookOpen, Brain, NotebookPen, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Layers, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { parseBulk } from "../lib/bulk";
 import { SUBJECT_COLORS } from "../lib/colors";
 import { formatMinutes, newId } from "../lib/format";
 import { useStore } from "../store";
 import { KIND_ICON, KIND_LABEL } from "./session";
+import { STEP_META } from "./steps";
 import { Button, cx, Field, NumberInput, Segmented, TextArea, TextInput } from "./ui";
 
 export const WEIGHT_LABEL: Record<Weight, string> = {
@@ -82,12 +82,6 @@ export function SubjectFields({ subject, onChange }: { subject: Subject; onChang
   );
 }
 
-const STEPS: { key: StepKey; icon: typeof BookOpen; label: string }[] = [
-  { key: "read", icon: BookOpen, label: "Read" },
-  { key: "summary", icon: NotebookPen, label: "Summary" },
-  { key: "cards", icon: Brain, label: "Anki cards" },
-];
-
 export function ChunkList({ subject }: { subject: Subject }) {
   const allChunks = useStore((s) => s.chunks);
   const settings = useStore((s) => s.settings);
@@ -102,11 +96,11 @@ export function ChunkList({ subject }: { subject: Subject }) {
     <div>
       <div className="mb-2 flex items-center justify-between text-sm">
         <span className="font-medium">{chunks.length} chunk{chunks.length === 1 ? "" : "s"}</span>
-        <span className="text-slate-500">≈ {formatMinutes(total)} of work incl. Anki cards</span>
+        <span className="text-slate-500">≈ {formatMinutes(total)} to watch, read and write cards</span>
       </div>
       {chunks.length === 0 && (
         <p className="rounded-xl border border-dashed border-slate-300 p-4 text-center text-sm text-slate-500 dark:border-slate-700">
-          No material yet. Add chapters or slide decks below.
+          No material yet. Add lectures, chapters or slide decks below.
         </p>
       )}
       <ul className="space-y-2">
@@ -163,16 +157,24 @@ function ChunkRow({
         <span title={KIND_LABEL[kind]} className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400">
           <KindIcon size={16} />
         </span>
-        <TextInput className="min-w-40 flex-1" value={chunk.title} aria-label="Title" onChange={(e) => onChange({ ...chunk, title: e.target.value })} />
-        <div className="flex items-center gap-1.5">
-          <NumberInput className="w-20" aria-label="Pages" min={0} value={chunk.pages} onChange={(v) => onChange({ ...chunk, pages: Math.max(0, Math.round(v)) })} />
-          <span className="text-xs text-slate-500">pages</span>
-          <NumberInput className="w-20" aria-label="Slides" min={0} value={chunk.slides} onChange={(v) => onChange({ ...chunk, slides: Math.max(0, Math.round(v)) })} />
-          <span className="text-xs text-slate-500">slides</span>
-        </div>
+        <TextInput className="min-w-0 flex-1" value={chunk.title} aria-label="Title" onChange={(e) => onChange({ ...chunk, title: e.target.value })} />
+      </div>
+      <div className="mt-2 grid grid-cols-3 gap-2">
+        {(
+          [
+            ["Video (min)", chunk.recordingMinutes ?? 0, (v: number) => onChange({ ...chunk, recordingMinutes: v })],
+            ["Pages", chunk.pages, (v: number) => onChange({ ...chunk, pages: v })],
+            ["Slides", chunk.slides, (v: number) => onChange({ ...chunk, slides: v })],
+          ] as const
+        ).map(([label, value, set]) => (
+          <label key={label} className="block">
+            <span className="mb-0.5 block text-[11px] text-slate-500">{label}</span>
+            <NumberInput aria-label={label} min={0} value={value} onChange={(v) => set(Math.max(0, Math.round(v)))} />
+          </label>
+        ))}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        {STEPS.map(({ key, icon: Icon, label }) => {
+        {STEP_META.filter(({ key }) => key !== "watch" || (chunk.recordingMinutes ?? 0) > 0).map(({ key, icon: Icon, label }) => {
           const value = chunk.done?.[key] ?? 0;
           const on = value >= 0.999;
           return (
@@ -196,15 +198,17 @@ function ChunkRow({
             </button>
           );
         })}
-        <label className="inline-flex items-center gap-1.5 text-xs text-slate-500">
-          <Brain size={13} />
+        <label className="inline-flex items-center gap-1.5 text-xs text-slate-500" title="Anki cards written for this chunk">
+          <Layers size={13} />
+          <span className="inline-block w-16">
           <NumberInput
-            className="h-7 w-16 px-2 py-0 text-xs"
+            className="h-7 px-2 py-0 text-xs"
             aria-label="Anki cards made"
             min={0}
             value={chunk.cards ?? cards}
             onChange={(v) => onChange({ ...chunk, cards: Math.max(0, Math.round(v)) })}
           />
+          </span>
           cards
         </label>
         <span className="text-xs text-slate-400">{done ? "done" : `${formatMinutes(left)} left of ${formatMinutes(minutes)}`}</span>
@@ -227,24 +231,36 @@ function ChunkRow({
 
 function AddChunks({ subject, nextOrder }: { subject: Subject; nextOrder: number }) {
   const addChunks = useStore((s) => s.addChunks);
+  const defaultRecording = useStore((s) => s.settings.defaultRecordingMinutes);
   const [mode, setMode] = useState<"one" | "many">("one");
   const [title, setTitle] = useState("");
+  const [recording, setRecording] = useState(defaultRecording);
   const [pages, setPages] = useState(0);
   const [slides, setSlides] = useState(0);
   const [text, setText] = useState("");
   const [kind, setKind] = useState<"pages" | "slides">("pages");
   const parsed = parseBulk(text, kind);
 
+  const canAddOne = !!title.trim() && (pages > 0 || slides > 0 || recording > 0);
   const addOne = () => {
-    if (!title.trim() || (pages <= 0 && slides <= 0)) return;
-    addChunks([{ id: newId(), subjectId: subject.id, title: title.trim(), pages, slides, order: nextOrder }]);
+    if (!canAddOne) return;
+    addChunks([{ id: newId(), subjectId: subject.id, title: title.trim(), recordingMinutes: recording, pages, slides, order: nextOrder }]);
     setTitle("");
     setPages(0);
     setSlides(0);
   };
 
+  // Lines without a recording length get the "recording per lecture" value.
   const addMany = () => {
-    addChunks(parsed.chunks.map((c, i) => ({ id: newId(), subjectId: subject.id, ...c, order: nextOrder + i })));
+    addChunks(
+      parsed.chunks.map((c, i) => ({
+        id: newId(),
+        subjectId: subject.id,
+        ...c,
+        recordingMinutes: c.recordingMinutes ?? recording,
+        order: nextOrder + i,
+      })),
+    );
     setText("");
   };
 
@@ -269,7 +285,12 @@ function AddChunks({ subject, nextOrder }: { subject: Subject; nextOrder: number
         >
           <div className="min-w-40 flex-1">
             <Field label="Name">
-              <TextInput value={title} placeholder="Ch 4 / Lecture 7" onChange={(e) => setTitle(e.target.value)} />
+              <TextInput value={title} placeholder="Lecture 7 / Ch 4" onChange={(e) => setTitle(e.target.value)} />
+            </Field>
+          </div>
+          <div className="w-24">
+            <Field label="Video (min)">
+              <NumberInput min={0} value={recording} onChange={setRecording} />
             </Field>
           </div>
           <div className="w-24">
@@ -282,7 +303,7 @@ function AddChunks({ subject, nextOrder }: { subject: Subject; nextOrder: number
               <NumberInput min={0} value={slides} onChange={setSlides} />
             </Field>
           </div>
-          <Button type="submit" disabled={!title.trim() || (pages <= 0 && slides <= 0)}>
+          <Button type="submit" disabled={!canAddOne}>
             <Plus size={16} /> Add
           </Button>
         </form>
@@ -292,8 +313,15 @@ function AddChunks({ subject, nextOrder }: { subject: Subject; nextOrder: number
             rows={5}
             value={text}
             onChange={(e) => setText(e.target.value)}
-            placeholder={"Ch 1-4: 22, 18, 30, 25\nLecture 5: 45 slides\nCh 6: 18p 30s"}
+            placeholder={"Lecture 1-4: 40, 35, 52, 44\nLecture 5: 45 slides 90min\nCh 6: 18p 30s"}
           />
+          <label className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+            Recording per lecture
+            <span className="inline-block w-20">
+              <NumberInput className="h-8 py-1" min={0} value={recording} onChange={setRecording} aria-label="Recording minutes per lecture" />
+            </span>
+            min (0 = none; a line can set its own, e.g. "90min")
+          </label>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2 text-xs text-slate-500">
               Plain numbers are

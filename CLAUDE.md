@@ -5,6 +5,10 @@ with exam dates, their material (chapters with pages, slide decks with slides)
 and a difficulty weight; the app plans every study session, including Anki
 work, and re-plans after a daily Yes/No check-in.
 
+Study workflow per lecture (chunk): 🎬 watch the recording → 📖 read the
+chapter / slides → ✍️ write Anki cards; then 🃏 study Anki (learn the new
+cards + review earlier cards of the same subject).
+
 Docs – read before bigger changes:
 - `docs/DESIGN.md` – product, data model, planner, check-in, dashboard
 - `docs/DECISIONS.md` – every decision with its reason (add new ones there)
@@ -35,8 +39,8 @@ Run `npm test && npm run typecheck` before every commit. CI runs the same
 ```
 packages/core/   Planning engine. Pure TypeScript, no dependencies, no DOM.
   src/types.ts        Data model: Subject, Chunk, BlockedRange, Settings, Plan…
-  src/effort.ts       Minutes per chunk (read + summary + Anki cards) × weight,
-                      splitting into pieces, item categories, Anki item size per session
+  src/effort.ts       Minutes per chunk (watch + read + write cards), splitting
+                      into pieces in step order, item categories, Anki items
   src/slots.ts        Slot grid: sessions per day, blocked days, exam halves,
                       weekly buffer half-day, extra slots
   src/scheduler.ts    planOnce() and planWithEscalation() – the core algorithm
@@ -62,8 +66,11 @@ apps/web/        React 19 + Vite 6 + Tailwind 4 PWA (zustand for state)
    week = `buffer` (catch-up reserve, empty unless needed).
 2. Reserve a short review session in the last free slot before every exam
    (first, so back-to-back exams each get one).
-3. Walk slots in time order; each session = an Anki review item + work items.
-   Items have a category (`kind`): chapter, slides, mixed, anki. The subject
+3. Walk slots in time order; each study session = lecture pieces, then an
+   Anki item (learn the session's new cards + review the same subjects).
+   Items have a category (`kind`): chapter, slides, mixed, recording, anki.
+   Pieces follow the step order watch → read → cards. A piece's room in a
+   session = its work + learning its new cards (`itemCost`). The subject
    with the least slack (capacity before its deadline − remaining work) goes first.
    `pacing: "even"` (default) only takes a slot when the subject is behind its
    steady pace or time is tight; `"early"` fills everything ASAP.

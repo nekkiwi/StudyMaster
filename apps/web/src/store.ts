@@ -180,7 +180,12 @@ export const useStore = create<Store>()(
       },
       merge: (persisted, current) => {
         const data = (persisted ?? {}) as Partial<AppData>;
-        return { ...current, ...data, settings: withDefaults(data.settings) };
+        const settings = withDefaults(data.settings);
+        // Older versions had a summary step; it's gone now.
+        const rates = settings.rates as unknown as Record<string, number>;
+        delete rates.summaryPerPage;
+        delete rates.summaryPerSlide;
+        return { ...current, ...data, settings };
       },
     },
   ),

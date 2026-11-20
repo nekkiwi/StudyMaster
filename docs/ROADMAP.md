@@ -1,8 +1,9 @@
 # Roadmap
 
 ## Done
-- ✅ **Planner** (`packages/core`): effort model with Anki, Anki as its own
-  item category + Anki-only sessions, review sessions before exams, weekly
+- ✅ **Planner** (`packages/core`): lecture workflow (watch → read → write
+  cards) with pieces in step order, Anki at the end of each session (learn new
+  + review same subject) + Anki-only sessions, review sessions before exams, weekly
   buffer, escalation with approval levels, pacing (steady / finish early),
   check-in, plan diff, validation, tests.
 - ✅ **Web app** (`apps/web`, local-only): setup wizard with quick entry and

@@ -4,6 +4,8 @@ import {
   ankiMinutesPerDay,
   ankiMinutesPerSession,
   cardsMade,
+  cutItem,
+  itemCost,
   isAnkiItem,
   splitChunk,
   totalMinutes,
@@ -16,6 +18,7 @@ import type {
   PlannedSession,
   PlanResult,
   Slot,
+  StepKey,
   StudyState,
   Subject,
   SubjectStatus,
@@ -51,9 +54,10 @@ const MAX_DECKS = 3;
  * 1. Build the slot grid (blocked days, exam halves, buffer and extra slots).
  * 2. Reserve a short review session right before every exam, first, so
  *    back-to-back exams still get one each.
- * 3. Walk the slots in time order. Each session starts with an Anki review
- *    item; the rest is filled with the subject that has the least slack
- *    (free capacity before its deadline minus remaining work).
+ * 3. Walk the slots in time order. Each study session gets work (watch →
+ *    read → write cards) from the subject with the least slack
+ *    (free capacity before its deadline minus remaining work), and ends
+ *    with Anki: learning the new cards + reviewing that subject's cards.
  *    Buffer and extra slots are only used by subjects that would not
  *    make it otherwise.
  * 4. Days without any session get a short Anki-only session, so reviews
@@ -94,7 +98,7 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
       .sort((a, b) => a.order - b.order);
     const queue = chunks.flatMap((c) => splitChunk(c, subject, s));
     queues.set(subject.id, queue);
-    remaining.set(subject.id, queue.reduce((sum, x) => sum + x.minutes, 0));
+    remaining.set(subject.id, queue.reduce((sum, x) => sum + itemCost(x), 0));
     fullEffort.set(
       subject.id,
       chunks.reduce((sum, c) => sum + totalMinutes(c, subject, s), 0),
@@ -161,13 +165,12 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
   const sessions: PlannedSession[] = [];
   const cardsOnDate = new Map<ISODate, number>();
 
-  // Decks worth reviewing: subjects in this session first, then upcoming exams.
-  const decksFor = (date: ISODate, first: string[]): string[] => {
+  // Decks for Anki-only days: subjects with an exam coming up, else all.
+  const decksFor = (date: ISODate): string[] => {
     const upcoming = subjects
       .filter((x) => x.examDate >= date && x.examDate <= addDays(date, FOCUS_DAYS))
       .map((x) => x.id);
-    const decks = [...new Set([...first, ...upcoming])];
-    return (decks.length > 0 ? decks : subjects.map((x) => x.id)).slice(0, MAX_DECKS);
+    return (upcoming.length > 0 ? upcoming : subjects.map((x) => x.id)).slice(0, MAX_DECKS);
   };
 
   for (const slot of grid) {
@@ -181,7 +184,7 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
     const key = slotKey(slot.date, slot.slot);
     const review = reviews.get(key);
     if (review) {
-      review.items = [ankiItem(slot.slot, anki, decksFor(slot.date, [review.reviewSubjectId!]))];
+      review.items = [ankiItem(slot.slot, [review.reviewSubjectId!], { reviewMinutes: anki })];
       sessions.push(review);
       continue;
     }
@@ -202,10 +205,11 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
         if (key >= deadlineKey.get(subject.id)!) continue;
         // A piece that doesn't fit is cut to fill the rest of the session,
         // but only if the rest is long enough to be worth starting.
-        if (next.minutes > capLeft + TAIL_TOLERANCE && capLeft < MIN_FRAGMENT_MINUTES) continue;
+        const nextCost = itemCost(next);
+        if (nextCost > capLeft + TAIL_TOLERANCE && capLeft < MIN_FRAGMENT_MINUTES) continue;
 
         // What one future session holds for this subject (max pieces per session).
-        const perSlot = Math.min(capacity, s.maxChunksPerSession * next.minutes);
+        const perSlot = Math.min(capacity, s.maxChunksPerSession * nextCost);
         const end = deadlineIndex.get(subject.id)!;
         const normalAhead = between(prefixNormal, index + 1, end) * perSlot;
         const bufferAhead = between(prefixBuffer, index + 1, end) * perSlot;
@@ -245,26 +249,32 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
 
       const queue = queues.get(best.id)!;
       let item = queue[0]!;
-      if (item.minutes > capLeft + TAIL_TOLERANCE) {
+      if (itemCost(item) > capLeft + TAIL_TOLERANCE) {
         // Leave a leftover of at least MIN_FRAGMENT_MINUTES for next time.
-        const headMinutes = Math.min(capLeft, item.minutes - MIN_FRAGMENT_MINUTES);
-        if (headMinutes < MIN_FRAGMENT_MINUTES) break;
-        const [head, tail] = cutItem(item, headMinutes / item.minutes);
+        const headCost = Math.min(capLeft, itemCost(item) - MIN_FRAGMENT_MINUTES);
+        if (headCost < MIN_FRAGMENT_MINUTES) break;
+        const [head, tail] = cutItem(item, headCost);
         queue[0] = tail;
         item = head;
       } else {
         queue.shift();
       }
       items.push(item);
-      capLeft -= item.minutes;
-      remaining.set(best.id, remaining.get(best.id)! - item.minutes);
+      capLeft -= itemCost(item);
+      remaining.set(best.id, remaining.get(best.id)! - itemCost(item));
       pendingCards += item.cards;
     }
 
     if (items.length > 0) {
-      const work = mergeSameChunk(items).map(roundItem);
-      const decks = decksFor(slot.date, work.map((x) => x.subjectId));
-      sessions.push({ ...slot, type: "study", items: [ankiItem(slot.slot, anki, decks), ...work] });
+      // Work first (watch → read → write cards), then Anki: learn the new
+      // cards and review earlier cards of the same subjects.
+      const work = mergeSameChunk(items);
+      const anki_ = ankiItem(slot.slot, [...new Set(work.map((x) => x.subjectId))], {
+        reviewMinutes: anki,
+        learnMinutes: work.reduce((sum, x) => sum + x.learnMinutes, 0),
+        newCards: work.reduce((sum, x) => sum + x.cards, 0),
+      });
+      sessions.push({ ...slot, type: "study", items: [...work.map(roundItem), anki_] });
     }
   }
 
@@ -280,14 +290,14 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
       s.sessionMinutes * s.anki.maxShareOfSession,
       Math.max(ANKI_ONLY_MIN_MINUTES, ankiMinutesPerDay(cards, s)),
     );
-    sessions.push({ ...slot, type: "anki", items: [ankiItem(slot.slot, minutes, decksFor(slot.date, []))] });
+    sessions.push({ ...slot, type: "anki", items: [ankiItem(slot.slot, decksFor(slot.date), { reviewMinutes: minutes })] });
   }
   sessions.sort((a, b) => slotKey(a.date, a.slot).localeCompare(slotKey(b.date, b.slot)));
 
   const unscheduled = subjects.flatMap((x) => queues.get(x.id)!.map(roundItem));
   relabelParts([...sessions.flatMap((x) => x.items).filter((x) => !isAnkiItem(x)), ...unscheduled]);
   const statuses: SubjectStatus[] = subjects.map((subject) => {
-    const deficit = queues.get(subject.id)!.reduce((sum, x) => sum + x.minutes, 0);
+    const deficit = queues.get(subject.id)!.reduce((sum, x) => sum + itemCost(x), 0);
     const total = initialRemaining.get(subject.id)!;
     const studyDates = sessions
       .filter((x) => x.items.some((i) => i.subjectId === subject.id))
@@ -310,7 +320,7 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
     bufferSlots: grid.filter((x) => x.kind === "buffer" && !usedKeys.has(slotKey(x.date, x.slot))),
     unscheduled,
     subjects: statuses,
-    feasible: unscheduled.reduce((sum, x) => sum + x.minutes, 0) < 1,
+    feasible: unscheduled.reduce((sum, x) => sum + itemCost(x), 0) < 1,
   };
 }
 
@@ -338,36 +348,22 @@ function pickReviewSlot(
   return pool[pool.length - 1];
 }
 
-/** Cuts a piece in two: `share` (0–1) of it now, the rest later. */
-function cutItem(item: PlanItem, share: number): [PlanItem, PlanItem] {
-  const part = (f: number): PlanItem => ({
-    ...item,
-    minutes: item.minutes * f,
-    cards: item.cards * f,
-    deltas: {
-      read: item.deltas.read * f,
-      summary: item.deltas.summary * f,
-      cards: item.deltas.cards * f,
-    },
-  });
-  return [part(share), part(1 - share)];
-}
-
 /** Back-to-back pieces of the same chunk in one session become one item. */
 function mergeSameChunk(items: PlanItem[]): PlanItem[] {
   const out: PlanItem[] = [];
   for (const item of items) {
     const last = out[out.length - 1];
     if (last && last.chunkId === item.chunkId) {
+      const sum = (k: StepKey) => ({ steps: last.steps[k] + item.steps[k], deltas: last.deltas[k] + item.deltas[k] });
       out[out.length - 1] = {
         ...last,
         minutes: last.minutes + item.minutes,
+        pages: last.pages + item.pages,
+        slides: last.slides + item.slides,
         cards: last.cards + item.cards,
-        deltas: {
-          read: last.deltas.read + item.deltas.read,
-          summary: last.deltas.summary + item.deltas.summary,
-          cards: last.deltas.cards + item.deltas.cards,
-        },
+        learnMinutes: last.learnMinutes + item.learnMinutes,
+        steps: { watch: sum("watch").steps, read: sum("read").steps, cards: sum("cards").steps },
+        deltas: { watch: sum("watch").deltas, read: sum("read").deltas, cards: sum("cards").deltas },
       };
     } else {
       out.push(item);
@@ -393,8 +389,21 @@ function relabelParts(items: PlanItem[]): void {
   }
 }
 
+/** Whole minutes, pages, slides and cards for display. Deltas stay exact. */
 function roundItem(item: PlanItem): PlanItem {
-  return { ...item, minutes: Math.round(item.minutes), cards: Math.round(item.cards) };
+  return {
+    ...item,
+    minutes: Math.round(item.minutes),
+    pages: Math.round(item.pages),
+    slides: Math.round(item.slides),
+    cards: Math.round(item.cards),
+    learnMinutes: Math.round(item.learnMinutes),
+    steps: {
+      watch: Math.round(item.steps.watch),
+      read: Math.round(item.steps.read),
+      cards: Math.round(item.steps.cards),
+    },
+  };
 }
 
 interface Step {

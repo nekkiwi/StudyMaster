@@ -43,7 +43,7 @@ export function SubjectsView({ planner }: { planner: Planner }) {
       {progress.length === 0 ? (
         <Card>
           <EmptyState icon={<BookMarked size={22} />} title="No subjects yet">
-            Add a subject with its exam date, then its chapters and slide decks.
+            Add a subject with its exam date, then its lectures, chapters and slide decks.
           </EmptyState>
         </Card>
       ) : (

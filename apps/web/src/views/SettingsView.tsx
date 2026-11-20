@@ -92,10 +92,10 @@ export function SettingsView() {
           <Section title="Days off" description="Vacation, breaks, sick days: nothing gets planned on these.">
             <DaysOffEditor />
           </Section>
-          <Section title="Anki" description="Every session starts with a review block." collapsible>
+          <Section title="Anki" description="Every session ends with Anki: the new cards plus reviews." collapsible>
             <AnkiSettingsForm />
           </Section>
-          <Section title="Time estimates" description="Minutes per page and slide, before the subject weight." collapsible>
+          <Section title="Time estimates" description="Recordings, reading and writing cards. Reading and cards are scaled by the subject weight." collapsible>
             <RateSettings />
           </Section>
           <Section title="Your data" description="Everything is stored on this device only.">

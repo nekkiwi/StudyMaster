@@ -24,17 +24,23 @@ export interface Subject {
   examHalf?: Half;
 }
 
-/** Every chunk is worked through in three steps. */
-export type StepKey = "read" | "summary" | "cards";
-export const STEPS: readonly StepKey[] = ["read", "summary", "cards"];
+/**
+ * Every chunk (usually one lecture) is worked through in this order:
+ * watch the lecture recording → read the chapter / slide deck → write Anki cards.
+ * Studying the cards (learning new + reviewing old) is a separate Anki item.
+ */
+export type StepKey = "watch" | "read" | "cards";
+export const STEPS: readonly StepKey[] = ["watch", "read", "cards"];
 
-/** One study unit: a book chapter, a slide deck, or both. */
+/** One study unit, usually a lecture: recording + chapter and/or slide deck. */
 export interface Chunk {
   id: string;
   subjectId: string;
   title: string;
   pages: number;
   slides: number;
+  /** Length of the lecture recording in minutes (0 or missing = none). */
+  recordingMinutes?: number;
   /** Position inside the subject; chunks are studied in this order. */
   order: number;
   /** Actual number of Anki cards made (overrides the estimate once known). */
@@ -56,23 +62,28 @@ export interface BlockedRange {
 
 /** Minutes per page/slide for each step, before the subject weight. */
 export interface Rates {
+  /**
+   * Watching time per recording minute: 1 = real time, 0.8 = at 1.25× speed,
+   * 1.2 = with pauses for notes. Not affected by the subject weight.
+   */
+  recordingFactor: number;
   readPerPage: number;
   readPerSlide: number;
-  summaryPerPage: number;
-  summaryPerSlide: number;
   cardsPerPage: number;
   cardsPerSlide: number;
   minutesPerCard: number;
 }
 
 export interface AnkiSettings {
-  /** Every session starts with at least this much Anki review. */
+  /** Every study session ends with at least this much Anki review. */
   minMinutesPerSession: number;
   /** Anki never takes more than this share of a session (0–1). */
   maxShareOfSession: number;
   /** Rough share of all existing cards that are due on a given day. */
   dueFractionPerDay: number;
   secondsPerReview: number;
+  /** Time to learn one new card (all its first repetitions together). */
+  secondsPerNewCard: number;
 }
 
 /**
@@ -110,6 +121,8 @@ export interface Settings {
   /** Length of the pre-exam review session, as a share of the subject's effort. */
   reviewShare: number;
   pacing: Pacing;
+  /** Recording length suggested when adding new chunks (UI default). */
+  defaultRecordingMinutes: number;
   rates: Rates;
   anki: AnkiSettings;
   weeklyBuffer: WeeklyBuffer;
@@ -138,11 +151,12 @@ export interface Slot {
 /**
  * What a plan item is about:
  * chapter = pages · slides = a slide deck · mixed = pages and slides ·
- * anki = Anki review (not tied to a chunk)
+ * recording = only a lecture recording · anki = studying Anki cards
+ * (not tied to a chunk)
  */
-export type ItemKind = "chapter" | "slides" | "mixed" | "anki";
+export type ItemKind = "chapter" | "slides" | "mixed" | "recording" | "anki";
 
-/** One thing to do in a session: a piece of a chunk, or an Anki review. */
+/** One thing to do in a session: a piece of a chunk, or studying Anki. */
 export interface PlanItem {
   kind: ItemKind;
   /** The chunk this piece belongs to. For Anki items: "anki@<slot>". */
@@ -151,29 +165,44 @@ export interface PlanItem {
   subjectId: string;
   /** Chunk title without the part suffix. */
   baseTitle: string;
-  /** Display title, e.g. "Chapter 4 (2/3)". */
+  /** Display title, e.g. "Lecture 4 (2/3)". */
   title: string;
   part: number;
   parts: number;
+  /** Working time of this item (for chunk pieces: watch + read + write cards). */
   minutes: number;
-  /** Estimated Anki cards created by this piece. */
+  /** Minutes per step in this piece, in order (watch → read → cards). */
+  steps: Record<StepKey, number>;
+  /** Pages and slides to read in this piece. */
+  pages: number;
+  slides: number;
+  /** Estimated Anki cards written in this piece. */
   cards: number;
+  /**
+   * Time to learn this piece's new cards. Counted in the session's Anki item,
+   * so it's not part of `minutes`, but it does take room in the session.
+   */
+  learnMinutes: number;
   /** How much of each step this piece completes (added to Chunk.done). */
   deltas: Record<StepKey, number>;
-  /** Anki items: subjects whose decks to review, most important first. */
+  /** Anki items: subjects whose decks to study, most important first. */
   decks?: string[];
+  /** Anki items: what the time is for. */
+  anki?: { newCards: number; learnMinutes: number; reviewMinutes: number };
 }
 
 /**
- * study  = Anki review + chunk work
- * review = Anki review + exam review right before an exam
- * anki   = only an Anki review (days without study, so reviews never pause)
+ * study  = chunk work (watch → read → write cards), then studying Anki
+ *          (the new cards + reviews of the same subjects)
+ * review = Anki for the subject + a short exam review right before an exam
+ * anki   = only Anki (days without study, so reviews never pause)
  */
 export type SessionType = "study" | "review" | "anki";
 
 export interface PlannedSession extends Slot {
   type: SessionType;
-  /** In order. Study and review sessions start with an Anki item. */
+  /** In order. Study sessions end with an Anki item; review and Anki-only
+   *  sessions start with one. */
   items: PlanItem[];
   /** For review sessions: the subject whose exam is next. */
   reviewSubjectId?: string;

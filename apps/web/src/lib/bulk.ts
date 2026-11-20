@@ -4,14 +4,17 @@
  *   Ch 1: 22                 → 22 pages
  *   Lecture 3: 45 slides     → 45 slides
  *   Ch 2: 18p 30s            → 18 pages + 30 slides
+ *   Lecture 4: 40s 90min     → 40 slides + a 90-minute recording ("1.5h" works too)
  *   Ch 1-4: 22, 18, 30, 25   → four chunks "Ch 1" … "Ch 4"
  *
- * Numbers without "p"/"s" count as `defaultKind`.
+ * Numbers without a unit count as `defaultKind`.
  */
 export interface ParsedChunk {
   title: string;
   pages: number;
   slides: number;
+  /** Only set when the line names a recording length. */
+  recordingMinutes?: number;
 }
 
 export interface BulkResult {
@@ -20,22 +23,26 @@ export interface BulkResult {
 }
 
 const RANGE_RE = /^(.*?)(\d+)\s*[-–]\s*(\d+)\s*$/;
-const VALUE_RE = /(\d+(?:[.,]\d+)?)\s*(pages?|p|slides?|s|folien|seiten)?\b/gi;
+const VALUE_RE = /(\d+(?:[.,]\d+)?)\s*(pages?|p|slides?|s|folien|seiten|minutes?|mins?|m|hours?|hrs?|h)?\b/gi;
 
-function parseSpec(spec: string, defaultKind: "pages" | "slides"): { pages: number; slides: number } | null {
+function parseSpec(spec: string, defaultKind: "pages" | "slides"): Omit<ParsedChunk, "title"> | null {
   let pages = 0;
   let slides = 0;
+  let recording: number | undefined;
   let found = false;
   for (const m of spec.matchAll(VALUE_RE)) {
     found = true;
-    const n = Math.round(Number(m[1]!.replace(",", ".")));
+    const value = Number(m[1]!.replace(",", "."));
     const unit = (m[2] ?? "").toLowerCase();
-    const isSlides = unit.startsWith("s") || unit === "folien" || (!unit && defaultKind === "slides");
-    if (unit === "seiten") pages += n;
-    else if (isSlides) slides += n;
-    else pages += n;
+    if (unit.startsWith("m")) recording = (recording ?? 0) + Math.round(value);
+    else if (unit.startsWith("h")) recording = (recording ?? 0) + Math.round(value * 60);
+    else if (unit === "seiten" || unit.startsWith("p")) pages += Math.round(value);
+    else if (unit === "folien" || unit.startsWith("s")) slides += Math.round(value);
+    else if (defaultKind === "slides") slides += Math.round(value);
+    else pages += Math.round(value);
   }
-  return found ? { pages, slides } : null;
+  if (!found) return null;
+  return recording !== undefined ? { pages, slides, recordingMinutes: recording } : { pages, slides };
 }
 
 export function parseBulk(text: string, defaultKind: "pages" | "slides" = "pages"): BulkResult {

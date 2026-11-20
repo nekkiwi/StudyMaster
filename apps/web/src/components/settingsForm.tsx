@@ -137,7 +137,7 @@ export function AnkiSettingsForm() {
   const a = s.anki;
   return (
     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-      <Field label="Anki at the start of every session (min)">
+      <Field label="Anki reviews in every session, at least (min)">
         <NumberInput min={0} max={60} value={a.minMinutesPerSession} onChange={(v) => update({ anki: { ...a, minMinutesPerSession: v } })} />
       </Field>
       <Field label="Anki can take up to (% of a session)">
@@ -148,6 +148,9 @@ export function AnkiSettingsForm() {
       </Field>
       <Field label="Share of cards due per day (%)" hint="10% is typical for a growing collection.">
         <NumberInput min={1} max={50} value={Math.round(a.dueFractionPerDay * 100)} onChange={(v) => update({ anki: { ...a, dueFractionPerDay: v / 100 } })} />
+      </Field>
+      <Field label="Seconds to learn a new card" hint="All its first repetitions together. Planned right after writing the cards.">
+        <NumberInput min={0} max={180} value={a.secondsPerNewCard} onChange={(v) => update({ anki: { ...a, secondsPerNewCard: v } })} />
       </Field>
     </div>
   );
@@ -163,14 +166,22 @@ export function RateSettings() {
     </Field>
   );
   return (
-    <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-      {row("Reading min / page", "readPerPage")}
-      {row("Reading min / slide", "readPerSlide")}
-      {row("Summary min / page", "summaryPerPage")}
-      {row("Summary min / slide", "summaryPerSlide")}
-      {row("Cards per page", "cardsPerPage", 0.1)}
-      {row("Cards per slide", "cardsPerSlide", 0.1)}
-      {row("Min per new card", "minutesPerCard")}
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <Field label="Usual recording length (min)" hint="Pre-filled when you add lectures.">
+          <NumberInput min={0} max={300} value={s.defaultRecordingMinutes} onChange={(v) => update({ defaultRecordingMinutes: Math.max(0, Math.round(v)) })} />
+        </Field>
+        <Field label="Watching time per video minute" hint="1 = real time · 0.8 = at 1.25× speed · 1.2 = with pauses">
+          <NumberInput min={0.3} max={3} step={0.1} value={r.recordingFactor} onChange={(v) => update({ rates: { ...r, recordingFactor: Math.max(0.3, v) } })} />
+        </Field>
+      </div>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+        {row("Reading min / page", "readPerPage")}
+        {row("Reading min / slide", "readPerSlide")}
+        {row("Cards per page", "cardsPerPage", 0.1)}
+        {row("Cards per slide", "cardsPerSlide", 0.1)}
+        {row("Min to write a card", "minutesPerCard")}
+      </div>
     </div>
   );
 }

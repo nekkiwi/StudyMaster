@@ -1,8 +1,9 @@
 import type { Settings } from "./types.js";
 
 /**
- * Starting values. Per page at weight 1.0:
- * 3 min reading + 1 min summary + 1.5 cards × 1.5 min ≈ 6.25 min.
+ * Starting values. Per page at weight 1.0: 3 min reading + 1.5 cards × 1.5 min
+ * writing ≈ 5.25 min. A lecture recording counts 1:1 (recordingFactor).
+ * Learning a new card in Anki ≈ 30 s (part of the session's Anki item).
  */
 export const DEFAULT_SETTINGS: Settings = {
   sessionMinutes: 150,
@@ -14,11 +15,11 @@ export const DEFAULT_SETTINGS: Settings = {
   examBufferDays: 2,
   reviewShare: 0.1,
   pacing: "even",
+  defaultRecordingMinutes: 60,
   rates: {
+    recordingFactor: 1,
     readPerPage: 3,
     readPerSlide: 1,
-    summaryPerPage: 1,
-    summaryPerSlide: 0.5,
     cardsPerPage: 1.5,
     cardsPerSlide: 0.7,
     minutesPerCard: 1.5,
@@ -28,6 +29,7 @@ export const DEFAULT_SETTINGS: Settings = {
     maxShareOfSession: 0.3,
     dueFractionPerDay: 0.1,
     secondsPerReview: 8,
+    secondsPerNewCard: 30,
   },
   weeklyBuffer: { enabled: true, when: "auto" },
 };

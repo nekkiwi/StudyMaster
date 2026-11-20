@@ -15,19 +15,22 @@ const s = DEFAULT_SETTINGS;
 const chapter: Chunk = { id: "c", subjectId: "bio", title: "Ch 1", pages: 20, slides: 0, order: 1 };
 
 describe("effort model", () => {
-  it("adds reading, summary and card creation", () => {
-    // 20 pages: 60 read + 20 summary + 30 cards × 1.5 min = 125
-    expect(stepMinutes(chapter, subject("bio", "2026-12-01"), s)).toEqual({
-      read: 60,
-      summary: 20,
-      cards: 45,
-    });
-    expect(totalMinutes(chapter, subject("bio", "2026-12-01"), s)).toBe(125);
+  it("adds watching, reading and writing cards", () => {
+    // 60 min recording + 20 pages × 3 min + 30 cards × 1.5 min = 165
+    const lecture = { ...chapter, recordingMinutes: 60 };
+    expect(stepMinutes(lecture, subject("bio", "2026-12-01"), s)).toEqual({ watch: 60, read: 60, cards: 45 });
+    expect(totalMinutes(lecture, subject("bio", "2026-12-01"), s)).toBe(165);
   });
 
-  it("applies the subject weight", () => {
-    expect(totalMinutes(chapter, subject("bio", "2026-12-01", { weight: 1.5 }), s)).toBe(187.5);
-    expect(totalMinutes(chapter, subject("bio", "2026-12-01", { weight: 0.5 }), s)).toBe(62.5);
+  it("applies the subject weight to reading and cards, not to the recording", () => {
+    const lecture = { ...chapter, recordingMinutes: 60 };
+    expect(totalMinutes(lecture, subject("bio", "2026-12-01", { weight: 1.5 }), s)).toBe(60 + 157.5);
+    expect(totalMinutes(lecture, subject("bio", "2026-12-01", { weight: 0.5 }), s)).toBe(60 + 52.5);
+  });
+
+  it("uses the recording factor for watching", () => {
+    const fast = { ...s, rates: { ...s.rates, recordingFactor: 0.8 } };
+    expect(stepMinutes({ ...chapter, recordingMinutes: 60 }, subject("bio", "2026-12-01"), fast).watch).toBe(48);
   });
 
   it("uses the real card count once entered", () => {
@@ -36,12 +39,28 @@ describe("effort model", () => {
   });
 
   it("only counts steps that are not done yet", () => {
-    const halfRead = { ...chapter, done: { read: 1, summary: 0.5 } };
-    expect(remainingMinutes(halfRead, subject("bio", "2026-12-01"), s)).toBe(10 + 45);
+    const halfDone = { ...chapter, recordingMinutes: 60, done: { watch: 1, read: 0.5 } };
+    expect(remainingMinutes(halfDone, subject("bio", "2026-12-01"), s)).toBe(30 + 45);
   });
 });
 
 describe("splitting", () => {
+  it("splits in step order: watch first, cards last", () => {
+    const lecture: Chunk = { ...chapter, pages: 40, recordingMinutes: 60 };
+    const parts = splitChunk(lecture, subject("bio", "2026-12-01"), s);
+    expect(parts.length).toBeGreaterThan(1);
+    const first = parts[0]!;
+    const last = parts[parts.length - 1]!;
+    expect(first.steps.watch).toBeCloseTo(60);
+    expect(first.steps.cards).toBe(0);
+    expect(last.steps.watch).toBe(0);
+    expect(last.steps.cards).toBeGreaterThan(0);
+    expect(parts.reduce((a, p) => a + p.deltas.watch, 0)).toBeCloseTo(1);
+    expect(parts.reduce((a, p) => a + p.pages, 0)).toBeCloseTo(40);
+    // Learning the new cards takes room, counted with the cards step.
+    expect(parts.reduce((a, p) => a + p.learnMinutes, 0)).toBeCloseTo((60 * 30) / 60);
+  });
+
   it("splits big chunks into session-sized pieces", () => {
     const big: Chunk = { ...chapter, pages: 60 };
     const parts = splitChunk(big, subject("bio", "2026-12-01"), s);
@@ -58,7 +77,7 @@ describe("splitting", () => {
   });
 
   it("returns nothing for a finished chunk", () => {
-    const done = { ...chapter, done: { read: 1, summary: 1, cards: 1 } };
+    const done = { ...chapter, done: { watch: 1, read: 1, cards: 1 } };
     expect(splitChunk(done, subject("bio", "2026-12-01"), s)).toEqual([]);
   });
 });

@@ -25,6 +25,14 @@ describe("bulk chunk entry", () => {
     ]);
   });
 
+  it("reads recording lengths in minutes or hours", () => {
+    expect(parseBulk("Lecture 4: 40s 90min\nLecture 5: 35 slides 1.5h\nLecture 6: 1h").chunks).toEqual([
+      { title: "Lecture 4", pages: 0, slides: 40, recordingMinutes: 90 },
+      { title: "Lecture 5", pages: 0, slides: 35, recordingMinutes: 90 },
+      { title: "Lecture 6", pages: 0, slides: 0, recordingMinutes: 60 },
+    ]);
+  });
+
   it("explains mistakes", () => {
     const { errors } = parseBulk("Ch 1 22\nCh 1-3: 1, 2\nCh 9: lots");
     expect(errors).toHaveLength(3);

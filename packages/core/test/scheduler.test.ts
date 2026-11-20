@@ -74,18 +74,38 @@ describe("planOnce", () => {
     expect(plan.feasible).toBe(true);
   });
 
-  it("starts every session with an Anki review item", () => {
+  it("ends every study session with Anki: new cards + reviews of the same subject", () => {
     const st = state([subject("bio", "2026-12-10")], chunks("bio", 5));
     const plan = planOnce(st, MON, normal);
-    for (const session of plan.sessions) {
-      expect(session.items[0]).toMatchObject({ kind: "anki", title: "Anki review" });
-      expect(session.items[0]!.minutes).toBeGreaterThanOrEqual(10);
-    }
     for (const session of plan.sessions.filter((x) => x.type === "study")) {
+      const anki = session.items[session.items.length - 1]!;
+      const newCards = work(session.items).reduce((a, i) => a + i.cards, 0);
+      expect(anki).toMatchObject({ kind: "anki", title: "Anki", decks: ["bio"] });
+      expect(anki.anki!.reviewMinutes).toBeGreaterThanOrEqual(10);
+      expect(Math.abs(anki.anki!.newCards - newCards)).toBeLessThanOrEqual(1);
+      expect(anki.minutes).toBe(anki.anki!.reviewMinutes + anki.anki!.learnMinutes);
       const used = session.items.reduce((a, i) => a + i.minutes, 0);
-      expect(used).toBeLessThanOrEqual(st.settings.sessionMinutes + 1);
+      expect(used).toBeLessThanOrEqual(st.settings.sessionMinutes + 11);
       expect(work(session.items).length).toBeLessThanOrEqual(st.settings.maxChunksPerSession);
       expect(work(session.items).every((i) => i.kind === "chapter")).toBe(true);
+    }
+    // Review and Anki-only sessions consist of an Anki item first.
+    for (const session of plan.sessions.filter((x) => x.type !== "study")) {
+      expect(session.items[0]!.kind).toBe("anki");
+    }
+  });
+
+  it("plans lectures as watch → read → write cards", () => {
+    const lectures = chunks("bio", 4, 20).map((c) => ({ ...c, recordingMinutes: 60 }));
+    const plan = planOnce(state([subject("bio", "2026-12-20")], lectures, { pacing: "early" }), MON, normal);
+    const pieces = work(plan.sessions.flatMap((x) => x.items)).filter((i) => i.chunkId === "bio-1");
+    expect(pieces[0]!.steps.watch).toBe(60);
+    expect(pieces[pieces.length - 1]!.steps.cards).toBeGreaterThan(0);
+    // No piece writes cards before the recording is fully watched.
+    let watched = 0;
+    for (const p of pieces) {
+      if (p.steps.cards > 0) expect(watched + p.steps.watch).toBeCloseTo(60, 0);
+      watched += p.steps.watch;
     }
   });
 
@@ -201,7 +221,8 @@ describe("planOnce", () => {
 });
 
 describe("planWithEscalation", () => {
-  // One 110-min session a day = 10 min Anki + 100 min study = one chunk.
+  // One 110-min session a day = 10 min Anki reviews + room for one 96-min chunk
+  // (84 min watch/read/write + 12 min learning its 24 new cards).
   // Exam Monday Nov 30 (morning). Sunday = review, Saturday = weekly buffer,
   // so Mon–Fri give 5 normal slots, plus 1 buffer slot and 6 extra afternoons.
   const tight: Partial<Settings> = {
@@ -239,14 +260,15 @@ describe("planWithEscalation", () => {
   it("reports the deficit when nothing fits", () => {
     const result = run(20);
     expect(result.level).toBe("infeasible");
-    expect(result.plan.subjects[0]!.deficitMinutes).toBe(800);
-    expect(result.warnings.join(" ")).toMatch(/BIO is 13.3 h short/);
+    // 8 chapters × 96 min (84 min work + 12 min learning their new cards).
+    expect(result.plan.subjects[0]!.deficitMinutes).toBe(768);
+    expect(result.warnings.join(" ")).toMatch(/BIO is 12.8 h short/);
   });
 
   it("shortens the exam buffer before touching the weekly buffer", () => {
     // Exam Friday morning, 1 session a day, review Thursday.
     // 2 buffer days → study Mon–Tue only. 1 buffer day → Mon–Wed.
-    const st = state([subject("bio", "2026-11-27")], chunks("bio", 3), {
+    const st = state([subject("bio", "2026-11-27")], chunks("bio", 4), {
       preferredSessionsPerDay: 1,
       maxSessionsPerDay: 1,
       examBufferDays: 2,
@@ -323,7 +345,7 @@ describe("validateState", () => {
     expect(errors).toMatch(/weight/);
     expect(errors).toMatch(/invalid exam date/);
     expect(errors).toMatch(/unknown subject/);
-    expect(errors).toMatch(/needs pages or slides/);
+    expect(errors).toMatch(/needs a recording, pages or slides/);
     expect(errors).toMatch(/Max sessions/);
   });
 });
@@ -371,6 +393,6 @@ describe("approval limit", () => {
     expect(full.level).toBe("useWeeklyBuffer");
     expect(capped.level).toBe("infeasible");
     expect(capped.usedBufferSlots).toEqual([]);
-    expect(capped.plan.subjects[0]!.deficitMinutes).toBe(100);
+    expect(capped.plan.subjects[0]!.deficitMinutes).toBe(96);
   });
 });

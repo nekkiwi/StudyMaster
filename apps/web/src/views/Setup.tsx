@@ -76,12 +76,12 @@ function Welcome({ onStart, onDemo }: { onStart: () => void; onDemo: () => void 
       <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Your exams, planned.</h1>
       <p className="mt-3 text-lg text-slate-600 dark:text-slate-400">
         Tell StudyMaster what you have to learn and when your exams are. It plans every session, including
-        summaries, Anki cards and reviews, and adjusts when life gets in the way.
+        watching lectures, reading, writing and studying Anki cards, and adjusts when life gets in the way.
       </p>
       <ul className="mt-8 space-y-3 text-slate-700 dark:text-slate-300">
         {[
           [GraduationCap, "Main study ends early, with a short review right before each exam"],
-          [Layers, "Every session starts with a few minutes of Anki"],
+          [Layers, "Every lecture: watch → read → write cards, then study Anki"],
           [CalendarDays, "A weekly buffer half-day for catching up, free if you don't need it"],
         ].map(([Icon, text], i) => {
           const I = Icon as typeof GraduationCap;
@@ -173,7 +173,7 @@ function MaterialStep() {
   return (
     <div>
       <StepHeader title="What do you have to learn?">
-        Add the chapters and slide decks for each subject, with their page or slide count. Tip: "Add many at once" is fastest.
+        Add the lectures for each subject: recording length, plus the slide deck or chapter that goes with it. Tip: "Add many at once" is fastest.
       </StepHeader>
       <div className="mb-4 flex flex-wrap gap-2">
         {subjects.map((s) => {
@@ -205,7 +205,7 @@ function MaterialStep() {
 function WeekStep() {
   return (
     <div>
-      <StepHeader title="How do you like to study?">One session is 2–3 hours. Each session starts with a short Anki review.</StepHeader>
+      <StepHeader title="How do you like to study?">One session is 2–3 hours: lecture work first, then Anki for the new cards and earlier ones.</StepHeader>
       <div className="space-y-4">
         <Card>
           <RhythmSettings />

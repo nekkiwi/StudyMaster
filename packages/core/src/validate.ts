@@ -21,8 +21,13 @@ export function validateState(state: StudyState): string[] {
     if (chunkIds.has(chunk.id)) errors.push(`Duplicate chunk id "${chunk.id}".`);
     chunkIds.add(chunk.id);
     if (!subjectIds.has(chunk.subjectId)) errors.push(`${chunk.title}: unknown subject.`);
-    if (chunk.pages < 0 || chunk.slides < 0) errors.push(`${chunk.title}: pages and slides can't be negative.`);
-    if (chunk.pages === 0 && chunk.slides === 0) errors.push(`${chunk.title}: needs pages or slides.`);
+    const recording = chunk.recordingMinutes ?? 0;
+    if (chunk.pages < 0 || chunk.slides < 0 || recording < 0) {
+      errors.push(`${chunk.title}: pages, slides and recording can't be negative.`);
+    }
+    if (chunk.pages === 0 && chunk.slides === 0 && recording === 0) {
+      errors.push(`${chunk.title}: needs a recording, pages or slides.`);
+    }
   }
 
   for (const range of state.blocked) {
@@ -42,6 +47,9 @@ export function validateState(state: StudyState): string[] {
   if (s.maxChunksPerSession < 1) errors.push("At least 1 chunk per session is needed.");
   if (s.examBufferDays < 0) errors.push("Exam buffer days can't be negative.");
   if (s.pacing !== "even" && s.pacing !== "early") errors.push('Pacing must be "even" or "early".');
+  if (s.rates.recordingFactor <= 0) errors.push("Recording factor must be above 0.");
+  if (s.anki.secondsPerNewCard < 0) errors.push("Seconds per new card can't be negative.");
+  if (s.defaultRecordingMinutes < 0) errors.push("Default recording length can't be negative.");
   const when = s.weeklyBuffer.when;
   if (when !== "auto" && (when.weekday < 0 || when.weekday > 6)) {
     errors.push("Weekly buffer weekday must be 0 (Sunday) to 6 (Saturday).");
