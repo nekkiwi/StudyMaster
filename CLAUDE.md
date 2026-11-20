@@ -20,7 +20,11 @@ npm run dev          # web app on http://localhost:5173
 npm test             # all tests (Vitest): planner + web app
 npm run typecheck
 npm run build        # production build → apps/web/dist
+npm run deploy       # manual deploy with wrangler (normally not needed)
 ```
+
+Deployment: Cloudflare Pages builds every push from GitHub (production =
+default branch, previews for other branches). See `docs/HOSTING.md`.
 
 Run `npm test && npm run typecheck` before every commit. CI runs the same
 (`.github/workflows/ci.yml`).

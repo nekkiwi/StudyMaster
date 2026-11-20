@@ -14,7 +14,8 @@
 ## Next, in order
 
 ### 1. Deploy as it is
-- Cloudflare Pages: build `npm run build`, output `apps/web/dist`, Node 22.
+- ✅ Cloudflare Pages builds from GitHub on every push (setup in
+  [HOSTING.md](HOSTING.md#deployment)).
 - "Install app" button (Android/desktop install prompt) + iPhone
   "Add to Home Screen" guide. See [HOSTING.md](HOSTING.md).
 

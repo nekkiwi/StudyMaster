@@ -74,10 +74,46 @@ to Cloudflare. Firebase needs the pay-as-you-go plan for scheduled functions.)
 6. Keep the fast paths: example data, quick entry (`Ch 1-8: 22, 18, …`),
    later "Import with AI".
 
-## Deployment steps (in order)
-1. Connect the repo to **Cloudflare Pages**: build `npm run build`, output
-   `apps/web/dist`, Node 22. Works right away (local-only data).
+## Deployment
+
+### Current setup: Cloudflare Pages builds from GitHub
+Every push builds and deploys automatically. The repo's default branch is
+production; every other branch gets its own preview link.
+
+One-time setup in the Cloudflare dashboard:
+1. **Workers & Pages → Create → Pages → Connect to Git** (on newer dashboards:
+   *Create application → Pages → Import an existing Git repository*).
+2. Authorize GitHub and pick **nekkiwi/StudyMaster**.
+3. Settings:
+   | Field | Value |
+   |---|---|
+   | Project name | `studymaster` |
+   | Production branch | the repo's default branch |
+   | Framework preset | None |
+   | Build command | `npm run build` |
+   | Build output directory | `apps/web/dist` |
+   | Root directory | *(leave empty)* |
+   Node 22 comes from `.nvmrc`; dependencies are installed automatically.
+4. **Save and Deploy.** The app is then live at `https://<project>.pages.dev`
+   (Cloudflare adds a suffix if the name is taken).
+
+Cache rules live in `apps/web/public/_headers` (service worker and
+`index.html` never cached, hashed assets cached for a year).
+
+Why not deploy from a Claude Code cloud session: Pages uploads use a
+short-lived upload key in the `Authorization` header, which the cloud
+session's network proxy replaces with the saved API token, so the upload
+fails (`Authorization failed [code: 8000013]`). Git builds avoid this.
+
+### Manual deploy (fallback, from your own computer)
+```bash
+npx wrangler@4 login
+npm run deploy      # builds and uploads to the "studymaster" Pages project
+```
+
+### Next steps
+1. ✅ Cloudflare Pages from GitHub.
 2. Add the **Install app** button + iPhone guide.
 3. **Worker + D1**: login (guest-first), sync, push check-ins.
-4. **Custom domain**.
+4. **Custom domain** (Pages → Custom domains).
 5. **Google Play** via PWABuilder once real people use it.
