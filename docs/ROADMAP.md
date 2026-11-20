@@ -1,7 +1,8 @@
 # Roadmap
 
 ## Done
-- ✅ **Planner** (`packages/core`): lecture workflow (watch → read → write
+- ✅ **Planner** (`packages/core`): weekly plan (default weekday afternoons +
+  weekend mornings, free days stay free), lecture workflow (watch → read → write
   cards) with pieces in step order, Anki at the end of each session (learn new
   + review same subject) + Anki-only sessions, review sessions before exams, weekly
   buffer, escalation with approval levels, pacing (steady / finish early),

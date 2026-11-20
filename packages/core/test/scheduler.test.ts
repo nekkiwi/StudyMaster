@@ -4,6 +4,7 @@ import { addDays } from "../src/dates.js";
 import { diffPlans } from "../src/diff.js";
 import { planOnce, planWithEscalation } from "../src/scheduler.js";
 import { buildSlotGrid } from "../src/slots.js";
+import { DEFAULT_WEEK, dailySessions, withDefaults } from "../src/defaults.js";
 import type { PlanItem, Settings } from "../src/types.js";
 import { validateState } from "../src/validate.js";
 import { chunks, state, subject } from "./helpers.js";
@@ -20,7 +21,7 @@ describe("slot grid", () => {
     const st = state(
       [subject("bio", "2026-11-27")],
       [],
-      { preferredSessionsPerDay: 2, maxSessionsPerDay: 2, weeklyBuffer: { enabled: false, when: "auto" } },
+      { week: dailySessions(2), maxSessionsPerDay: 2, weeklyBuffer: { enabled: false, when: "auto" } },
       [{ id: "sick", start: "2026-11-24", end: "2026-11-25", reason: "sick" }],
     );
     const grid = buildSlotGrid(st, MON, "2026-11-27");
@@ -31,7 +32,7 @@ describe("slot grid", () => {
 
   it("marks slots above the preferred count as extra", () => {
     const st = state([subject("bio", "2026-11-27")], [], {
-      preferredSessionsPerDay: 2,
+      week: dailySessions(2),
       maxSessionsPerDay: 4,
       weeklyBuffer: { enabled: false, when: "auto" },
     });
@@ -46,7 +47,7 @@ describe("slot grid", () => {
 
   it("puts the weekly buffer on a fixed half-day", () => {
     const st = state([subject("bio", "2026-12-20")], [], {
-      preferredSessionsPerDay: 4,
+      week: dailySessions(4),
       maxSessionsPerDay: 4,
       weeklyBuffer: { enabled: true, when: { weekday: 0, half: "pm" } },
     });
@@ -58,6 +59,44 @@ describe("slot grid", () => {
       "2026-12-06 pm1",
       "2026-12-06 pm2",
     ]);
+  });
+});
+
+describe("weekly plan", () => {
+  it("defaults to weekday afternoons and one half-day on the weekend", () => {
+    const st = state([subject("bio", "2026-12-20")], [], { week: DEFAULT_WEEK, weeklyBuffer: { enabled: false, when: "auto" } });
+    const grid = buildSlotGrid(st, MON, "2026-11-29").filter((x) => x.kind === "normal");
+    const byDay = (d: string) => grid.filter((x) => x.date === d).map((x) => x.slot);
+    for (const d of ["2026-11-23", "2026-11-24", "2026-11-25", "2026-11-26", "2026-11-27"]) {
+      expect(byDay(d)).toEqual(["pm1", "pm2"]);
+    }
+    expect(byDay("2026-11-28")).toEqual(["am1", "am2"]);
+    expect(byDay("2026-11-29")).toEqual(["am1", "am2"]);
+  });
+
+  it("keeps free days completely free: no study, no Anki, no extra sessions", () => {
+    // Study only Mon/Wed/Fri afternoons; allow up to 4 sessions on study days.
+    const off = { am: 0, pm: 0 } as const;
+    const pm = { am: 0, pm: 2 } as const;
+    const week = [off, pm, off, pm, off, pm, off] as typeof DEFAULT_WEEK;
+    const st = state([subject("bio", "2026-12-18")], chunks("bio", 40), {
+      week,
+      maxSessionsPerDay: 4,
+      pacing: "early",
+      weeklyBuffer: { enabled: false, when: "auto" },
+    });
+    const result = planWithEscalation(st, MON);
+    expect(result.level).not.toBe("normal"); // too much work: needs extras
+    for (const session of result.plan.sessions) {
+      expect([1, 3, 5]).toContain(new Date(session.date + "T12:00Z").getUTCDay());
+    }
+    expect(result.usedExtraSlots.length).toBeGreaterThan(0);
+    for (const slot of result.usedExtraSlots) expect(["am1", "am2"]).toContain(slot.slot);
+  });
+
+  it("rejects a week without any study time", () => {
+    const none = withDefaults({ week: [0, 1, 2, 3, 4, 5, 6].map(() => ({ am: 0, pm: 0 })) as unknown as typeof DEFAULT_WEEK });
+    expect(validateState({ subjects: [], chunks: [], blocked: [], settings: none }).join(" ")).toMatch(/at least one half-day/);
   });
 });
 
@@ -227,7 +266,7 @@ describe("planWithEscalation", () => {
   // so Mon–Fri give 5 normal slots, plus 1 buffer slot and 6 extra afternoons.
   const tight: Partial<Settings> = {
     sessionMinutes: 110,
-    preferredSessionsPerDay: 1,
+    week: dailySessions(1),
     maxSessionsPerDay: 2,
     examBufferDays: 0,
     weeklyBuffer: { enabled: true, when: "auto" },
@@ -269,7 +308,7 @@ describe("planWithEscalation", () => {
     // Exam Friday morning, 1 session a day, review Thursday.
     // 2 buffer days → study Mon–Tue only. 1 buffer day → Mon–Wed.
     const st = state([subject("bio", "2026-11-27")], chunks("bio", 4), {
-      preferredSessionsPerDay: 1,
+      week: dailySessions(1),
       maxSessionsPerDay: 1,
       examBufferDays: 2,
       // Sunday afternoon buffer = after the exam, so it can't help here.
@@ -339,7 +378,7 @@ describe("validateState", () => {
     const bad = state(
       [subject("bio", "2026-02-30", { weight: 2 as never })],
       [{ id: "x", subjectId: "nope", title: "X", pages: 0, slides: 0, order: 1 }],
-      { preferredSessionsPerDay: 3, maxSessionsPerDay: 2 },
+      { maxSessionsPerDay: 5 as never },
     );
     const errors = validateState(bad).join("\n");
     expect(errors).toMatch(/weight/);
@@ -384,7 +423,7 @@ describe("approval limit", () => {
   it("stops at the level the user has approved", () => {
     const st = state([subject("bio", "2026-11-30")], chunks("bio", 6), {
       sessionMinutes: 110,
-      preferredSessionsPerDay: 1,
+      week: dailySessions(1),
       maxSessionsPerDay: 2,
       examBufferDays: 0,
     });

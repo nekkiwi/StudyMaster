@@ -1,4 +1,4 @@
-import { withDefaults, type Chunk, type Subject } from "@studymaster/core";
+import { dailySessions, withDefaults, type Chunk, type Subject } from "@studymaster/core";
 import { describe, expect, it } from "vitest";
 import { computePlanner, planStart, proposalKey, usedSlotKeys } from "../src/planner.js";
 import type { AppData } from "../src/store.js";
@@ -49,7 +49,7 @@ describe("computePlanner", () => {
   it("shows a proposal and keeps the plan within approved limits", () => {
     // 1 session a day, 30 chunks: needs buffer and extra sessions.
     const tight = data({
-      settings: withDefaults({ preferredSessionsPerDay: 1, maxSessionsPerDay: 2 }),
+      settings: withDefaults({ week: dailySessions(1), maxSessionsPerDay: 2 }),
       chunks: Array.from({ length: 30 }, (_, i) => ({
         id: `c${i}`, subjectId: "bio", title: `Ch ${i + 1}`, pages: 16, slides: 0, order: i,
       })),
@@ -78,7 +78,7 @@ describe("computePlanner", () => {
   });
 
   it("asks again when the plan needs slots that were not approved", () => {
-    const settings = withDefaults({ preferredSessionsPerDay: 1, maxSessionsPerDay: 2 });
+    const settings = withDefaults({ week: dailySessions(1), maxSessionsPerDay: 2 });
     const many = (n: number) =>
       Array.from({ length: n }, (_, i): Chunk => ({ id: `c${i}`, subjectId: "bio", title: `Ch ${i}`, pages: 16, slides: 0, order: i }));
     const small = computePlanner(data({ settings, chunks: many(26), checkIns: { "2026-11-24": record } }), TODAY);

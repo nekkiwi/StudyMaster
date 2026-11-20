@@ -1,4 +1,22 @@
-import type { Settings } from "./types.js";
+import type { DayPlan, Settings, WeekPlan } from "./types.js";
+
+const afternoon: DayPlan = { am: 0, pm: 2 };
+const morning: DayPlan = { am: 2, pm: 0 };
+
+/** Weekdays: afternoons. Weekend: one half-day (the morning) per day. */
+export const DEFAULT_WEEK: WeekPlan = [morning, afternoon, afternoon, afternoon, afternoon, afternoon, morning];
+
+/** The same plan for every day, e.g. everyDay(1, 1) = one morning + one afternoon session. */
+export function everyDay(am: DayPlan["am"], pm: DayPlan["pm"]): WeekPlan {
+  const d: DayPlan = { am, pm };
+  return [d, d, d, d, d, d, d];
+}
+
+/** Every day with this many sessions, in the order am1, pm1, am2, pm2. */
+export function dailySessions(count: 1 | 2 | 3 | 4): WeekPlan {
+  const plans: Record<number, DayPlan> = { 1: { am: 1, pm: 0 }, 2: { am: 1, pm: 1 }, 3: { am: 2, pm: 1 }, 4: { am: 2, pm: 2 } };
+  return everyDay(plans[count]!.am, plans[count]!.pm);
+}
 
 /**
  * Starting values. Per page at weight 1.0: 3 min reading + 1.5 cards × 1.5 min
@@ -7,7 +25,8 @@ import type { Settings } from "./types.js";
  */
 export const DEFAULT_SETTINGS: Settings = {
   sessionMinutes: 150,
-  preferredSessionsPerDay: 2,
+  // Weekday afternoons (2 sessions), one half-day on Saturday and Sunday.
+  week: DEFAULT_WEEK,
   maxSessionsPerDay: 3,
   maxChunksPerSession: 3,
   maxPagesPerChunk: 25,
@@ -41,5 +60,6 @@ export function withDefaults(partial: Partial<Settings> = {}): Settings {
     rates: { ...DEFAULT_SETTINGS.rates, ...partial.rates },
     anki: { ...DEFAULT_SETTINGS.anki, ...partial.anki },
     weeklyBuffer: { ...DEFAULT_SETTINGS.weeklyBuffer, ...partial.weeklyBuffer },
+    week: (partial.week ?? DEFAULT_SETTINGS.week).map((d) => ({ ...d })) as WeekPlan,
   };
 }

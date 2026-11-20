@@ -1,17 +1,73 @@
-import type { BlockReason, BlockedRange, Half, SessionCount, Settings } from "@studymaster/core";
+import {
+  DEFAULT_WEEK,
+  everyDay,
+  sessionsPerWeek,
+  type BlockReason,
+  type BlockedRange,
+  type Half,
+  type HalfDaySessions,
+  type SessionCount,
+  type Settings,
+  type WeekPlan,
+} from "@studymaster/core";
 import { Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { formatShort, newId, todayISO, WEEKDAYS } from "../lib/format";
 import { useStore } from "../store";
 import { Button, Field, NumberInput, Segmented, Select, TextInput, Toggle } from "./ui";
 
 const COUNTS: SessionCount[] = [1, 2, 3, 4];
-const COUNT_HINT: Record<SessionCount, string> = {
-  1: "1 morning",
-  2: "1 morning + 1 afternoon",
-  3: "2 morning + 1 afternoon",
-  4: "2 morning + 2 afternoon",
-};
+const HALF_OPTIONS = [
+  { value: 0, label: "–", hint: "Free" },
+  { value: 1, label: "1", hint: "1 session" },
+  { value: 2, label: "2", hint: "2 sessions" },
+] as const;
+const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Monday first
+
+const PRESETS: { label: string; week: () => WeekPlan }[] = [
+  { label: "Weekday afternoons + weekend mornings", week: () => DEFAULT_WEEK.map((d) => ({ ...d })) as WeekPlan },
+  { label: "Weekday afternoons only", week: () => DEFAULT_WEEK.map((d, i) => (i === 0 || i === 6 ? { am: 0, pm: 0 } : { ...d })) as WeekPlan },
+  { label: "Every day, morning + afternoon", week: () => everyDay(1, 1) },
+];
+
+/** Mon–Sun × morning/afternoon: how many sessions you normally study. */
+export function WeekGrid() {
+  const s = useStore((x) => x.settings);
+  const update = useStore((x) => x.updateSettings);
+  const setDay = (weekday: number, half: Half, value: HalfDaySessions) => {
+    const week = s.week.map((d) => ({ ...d })) as WeekPlan;
+    week[weekday] = { ...week[weekday]!, [half]: value };
+    update({ week });
+  };
+  const perWeek = sessionsPerWeek(s);
+
+  return (
+    <div>
+      <div className="grid grid-cols-[3.5rem_1fr_1fr] items-center gap-x-2 gap-y-1.5">
+        <span />
+        <span className="text-center text-xs font-medium text-slate-500">Morning</span>
+        <span className="text-center text-xs font-medium text-slate-500">Afternoon</span>
+        {WEEK_ORDER.map((d) => (
+          <Fragment key={d}>
+            <span className="text-sm font-medium">{WEEKDAYS[d]!.slice(0, 3)}</span>
+            <Segmented value={s.week[d]!.am} onChange={(v) => setDay(d, "am", v)} options={[...HALF_OPTIONS]} />
+            <Segmented value={s.week[d]!.pm} onChange={(v) => setDay(d, "pm", v)} options={[...HALF_OPTIONS]} />
+          </Fragment>
+        ))}
+      </div>
+      <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">
+        {perWeek} session{perWeek === 1 ? "" : "s"} a week ≈ {Math.round((perWeek * s.sessionMinutes) / 60)} h. Free half-days stay free.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {PRESETS.map((p) => (
+          <Button key={p.label} variant="secondary" size="sm" onClick={() => update({ week: p.week() })}>
+            {p.label}
+          </Button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function RhythmSettings() {
   const s = useStore((x) => x.settings);
@@ -19,18 +75,14 @@ export function RhythmSettings() {
 
   return (
     <div className="space-y-5">
-      <Field label="Sessions per day" hint={COUNT_HINT[s.preferredSessionsPerDay]} group>
-        <Segmented
-          value={s.preferredSessionsPerDay}
-          onChange={(v) => update({ preferredSessionsPerDay: v, maxSessionsPerDay: Math.max(v, s.maxSessionsPerDay) as SessionCount })}
-          options={COUNTS.map((c) => ({ value: c, label: String(c), hint: COUNT_HINT[c] }))}
-        />
+      <Field label="When do you study?" hint="Up to 2 sessions per morning or afternoon." group>
+        <WeekGrid />
       </Field>
-      <Field label="Most sessions I'd accept on a busy day" hint="Only used if you fall behind, and only after you agree." group>
+      <Field label="On a busy day, at most" hint="Extra sessions are only added on days you already study, and only after you agree." group>
         <Segmented
           value={s.maxSessionsPerDay}
-          onChange={(v) => update({ maxSessionsPerDay: Math.max(v, s.preferredSessionsPerDay) as SessionCount })}
-          options={COUNTS.map((c) => ({ value: c, label: String(c) }))}
+          onChange={(v) => update({ maxSessionsPerDay: v })}
+          options={COUNTS.map((c) => ({ value: c, label: `${c} session${c > 1 ? "s" : ""}` }))}
         />
       </Field>
       <Field label={`Session length: ${Math.floor(s.sessionMinutes / 60)} h ${s.sessionMinutes % 60 ? `${s.sessionMinutes % 60} min` : ""}`}>

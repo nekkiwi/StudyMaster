@@ -1,17 +1,40 @@
 import { addDays, eachDay, isWithin, weekKey, weekday, type ISODate } from "./dates.js";
-import type { Half, SessionCount, Slot, SlotId, StudyState } from "./types.js";
+import type { DayPlan, Half, Settings, Slot, SlotId, StudyState } from "./types.js";
 
 export const SLOT_ORDER: readonly SlotId[] = ["am1", "am2", "pm1", "pm2"];
 
-const SLOTS_FOR_COUNT: Record<SessionCount, SlotId[]> = {
-  1: ["am1"],
-  2: ["am1", "pm1"],
-  3: ["am1", "am2", "pm1"],
-  4: ["am1", "am2", "pm1", "pm2"],
-};
+/** The sessions of a normal day, e.g. { am: 0, pm: 2 } → pm1, pm2. */
+export function normalSlots(day: DayPlan): SlotId[] {
+  const out: SlotId[] = [];
+  if (day.am >= 1) out.push("am1");
+  if (day.am >= 2) out.push("am2");
+  if (day.pm >= 1) out.push("pm1");
+  if (day.pm >= 2) out.push("pm2");
+  return out;
+}
 
-export function slotsForCount(count: SessionCount): SlotId[] {
-  return SLOTS_FOR_COUNT[count];
+/**
+ * Slots that may be added on a busy day (with approval), closest to the
+ * normal sessions first. Days without any normal session get none.
+ */
+export function extraSlots(day: DayPlan, maxSessions: number): SlotId[] {
+  const normal = normalSlots(day);
+  if (normal.length === 0) return [];
+  const pos = (x: SlotId) => SLOT_ORDER.indexOf(x);
+  const distance = (x: SlotId) => Math.min(...normal.map((n) => Math.abs(pos(n) - pos(x))));
+  return SLOT_ORDER.filter((x) => !normal.includes(x))
+    .sort((a, b) => distance(a) - distance(b) || pos(a) - pos(b))
+    .slice(0, Math.max(0, maxSessions - normal.length));
+}
+
+/** Normal sessions in a week. */
+export function sessionsPerWeek(settings: Settings): number {
+  return settings.week.reduce((sum, d) => sum + d.am + d.pm, 0);
+}
+
+/** Whether any study day allows extra sessions. */
+export function allowsExtraSessions(settings: Settings): boolean {
+  return settings.week.some((d) => extraSlots(d, settings.maxSessionsPerDay).length > 0);
 }
 
 export function halfOf(slot: SlotId): Half {
@@ -29,15 +52,13 @@ export function isBlocked(state: StudyState, date: ISODate): boolean {
 
 /**
  * All study slots from `from` to `to` (inclusive), in time order.
- * Blocked days have no slots. Exam halves are removed. Slots above the
- * preferred count are "extra". One half-day per week becomes "buffer".
+ * Normal slots come from the weekly plan; free days and half-days have none.
+ * Blocked days have no slots. Exam halves are removed. Extra slots (up to
+ * max sessions per day, only on study days) are marked "extra". One
+ * half-day per week becomes "buffer".
  */
 export function buildSlotGrid(state: StudyState, from: ISODate, to: ISODate): Slot[] {
   const s = state.settings;
-  const preferred = slotsForCount(s.preferredSessionsPerDay);
-  const all = slotsForCount(
-    Math.max(s.preferredSessionsPerDay, s.maxSessionsPerDay) as SessionCount,
-  );
 
   const grid: Slot[] = [];
   if (to < from) return grid;
@@ -47,9 +68,13 @@ export function buildSlotGrid(state: StudyState, from: ISODate, to: ISODate): Sl
     const examHalves = new Set(
       state.subjects.filter((x) => x.examDate === date).map((x) => x.examHalf ?? "am"),
     );
-    for (const slot of all) {
+    const day = s.week[weekday(date)]!;
+    const normal = normalSlots(day);
+    const extra = extraSlots(day, s.maxSessionsPerDay);
+    for (const slot of SLOT_ORDER) {
+      if (!normal.includes(slot) && !extra.includes(slot)) continue;
       if (examHalves.has(halfOf(slot))) continue;
-      grid.push({ date, slot, kind: preferred.includes(slot) ? "normal" : "extra" });
+      grid.push({ date, slot, kind: normal.includes(slot) ? "normal" : "extra" });
     }
   }
 

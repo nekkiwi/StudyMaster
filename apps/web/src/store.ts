@@ -185,6 +185,8 @@ export const useStore = create<Store>()(
         const rates = settings.rates as unknown as Record<string, number>;
         delete rates.summaryPerPage;
         delete rates.summaryPerSlide;
+        // Older versions had "sessions per day" instead of a weekly plan.
+        delete (settings as unknown as Record<string, unknown>).preferredSessionsPerDay;
         return { ...current, ...data, settings };
       },
     },

@@ -98,6 +98,18 @@ export interface WeeklyBuffer {
 
 export type SessionCount = 1 | 2 | 3 | 4;
 
+/** Sessions in one half-day: none, one, or two. */
+export type HalfDaySessions = 0 | 1 | 2;
+
+/** When you study on one weekday: sessions in the morning and the afternoon. */
+export interface DayPlan {
+  am: HalfDaySessions;
+  pm: HalfDaySessions;
+}
+
+/** Your normal week, indexed by weekday: 0 = Sunday … 6 = Saturday. */
+export type WeekPlan = [DayPlan, DayPlan, DayPlan, DayPlan, DayPlan, DayPlan, DayPlan];
+
 /**
  * even  = spread each subject's work steadily until its finish date
  *         (Anki keeps running every day, less cramming early on)
@@ -108,9 +120,15 @@ export type Pacing = "even" | "early";
 export interface Settings {
   /** Length of one session in minutes (2–3 h). */
   sessionMinutes: number;
-  /** Sessions per day the plan normally uses. */
-  preferredSessionsPerDay: SessionCount;
-  /** Upper limit the planner may go to, only with approval. */
+  /**
+   * Your normal week: which half-days you study and how many sessions.
+   * Days and half-days without sessions are free – nothing is planned there.
+   */
+  week: WeekPlan;
+  /**
+   * On days you study, the plan may go up to this many sessions in total –
+   * only after you approve (extra sessions). Free days stay free.
+   */
   maxSessionsPerDay: SessionCount;
   maxChunksPerSession: number;
   /** Bigger chunks are split automatically. */

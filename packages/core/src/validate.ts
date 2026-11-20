@@ -38,8 +38,14 @@ export function validateState(state: StudyState): string[] {
     }
   }
 
-  if (s.maxSessionsPerDay < s.preferredSessionsPerDay) {
-    errors.push("Max sessions per day can't be lower than preferred sessions per day.");
+  const halves = [0, 1, 2];
+  if (s.week.length !== 7 || s.week.some((d) => !halves.includes(d.am) || !halves.includes(d.pm))) {
+    errors.push("The weekly plan needs 7 days with 0, 1 or 2 sessions per half-day.");
+  } else if (s.week.every((d) => d.am + d.pm === 0)) {
+    errors.push("Pick at least one half-day per week to study.");
+  }
+  if (s.maxSessionsPerDay < 1 || s.maxSessionsPerDay > 4) {
+    errors.push("Max sessions per day must be between 1 and 4.");
   }
   if (s.sessionMinutes < 60 || s.sessionMinutes > 240) {
     errors.push("A session should be between 1 and 4 hours.");

@@ -35,8 +35,10 @@ keeps the plan honest as real life happens.
 2. *Material:* lectures with recording length plus slide deck and/or
    chapter (pages, slides). Quick entry like `Lecture 1-8: 40, 35, …` (with a
    "recording per lecture" default) or `Lecture 3: 45 slides 90min`.
-3. *Your week:* sessions per day (preferred and max), session length, pace,
-   chunk limits, weekly buffer.
+3. *Your week:* a Mon–Sun grid – which mornings / afternoons you study
+   (0, 1 or 2 sessions each). **Preset: weekday afternoons + one half-day
+   (the morning) on Saturday and Sunday**, 2 sessions each. Plus max
+   sessions on a busy day, session length, pace, chunk limits, weekly buffer.
 4. *Days off:* vacation, breaks, other blocked days.
 5. *Your plan:* summary – total hours, sessions, whether everything fits.
 "Try with example data" skips all of this for a quick look.
@@ -60,10 +62,11 @@ All types live in `packages/core/src/types.ts`.
 | **Chunk** | One unit of material, usually **a lecture**: a recording (`recordingMinutes`, default 60) plus a chapter (`pages`) and/or slide deck (`slides`). Has an order within its subject, optional real card count, and progress per step (`done.watch/read/cards`, 0–1). |
 | **Steps** | Every chunk is worked through in order: 🎬 **watch** the recording → 📖 **read** the chapter / slides → ✍️ **write** Anki cards. |
 | **Blocked range** | Days with no studying at all: vacation, sick, study break, other (+ note). |
-| **Session** | One 2–3 h block (default 150 min). Up to 4 per day: `am1, am2` (morning) and `pm1, pm2` (afternoon). 1 session = `am1`; 2 = `am1, pm1`; 3 = `am1, am2, pm1`; 4 = all. |
+| **Session** | One 2–3 h block (default 150 min). Up to 4 per day: `am1, am2` (morning) and `pm1, pm2` (afternoon). A half-day = up to 2 sessions. |
+| **Weekly plan** (`week`) | Per weekday: sessions in the morning and afternoon (0, 1 or 2). We **don't assume studying every day**. Default: Mon–Fri afternoon (2), Sat + Sun morning (2) = 14 sessions / week. Free days and half-days get nothing – no study, no Anki-only session, no extra sessions. |
 | **Plan item** | One thing to do in a session. Category (`kind`): **chapter**, **slides**, **mixed** (both), **recording** (video only) or **anki** (studying cards). Lecture pieces carry minutes per step, pages/slides and cards for that piece. |
 | **Session type** | **study** (lecture work, then Anki) · **review** (Anki for the subject + short exam review right before an exam) · **anki** (Anki only, on days without study) |
-| **Slot kind** | **normal** (within preferred sessions/day) · **buffer** (the weekly catch-up half-day) · **extra** (above preferred, up to max) |
+| **Slot kind** | **normal** (from the weekly plan) · **buffer** (the weekly catch-up half-day) · **extra** (on days you already study, up to max sessions per day, closest to your normal sessions; only with approval) |
 
 ### Studying Anki is its own item, at the end of each session
 The real workflow: A) watch → read → write cards, then B) study Anki.
@@ -77,9 +80,10 @@ The real workflow: A) watch → read → write cards, then B) study Anki.
   ("Done"). A copyable Anki search for a Filtered Deck, e.g.
   `(deck:"Chemistry*" OR deck:"Biology*") (is:due OR is:new)`.
   Suggested deck naming in Anki: `Subject::Chunk title`.
-- **Days without study** (before the last exam, not blocked, not an exam day,
-  not the buffer) get a short **Anki-only session** (≥ 15 min), so reviews
-  never pause. Only once cards exist.
+- **Study days without study work** (e.g. with steady pacing; not blocked,
+  not an exam day, not the buffer) get a short **Anki-only session**
+  (≥ 15 min), so reviews never pause. Only once cards exist. Free days in the
+  weekly plan stay free.
 
 ## 4. Effort model
 
@@ -102,10 +106,11 @@ sessions, clamped to [10 min, 30 % of a session] per session.
 
 Code: `packages/core/src/scheduler.ts`. Pure function: data in, plan out.
 
-1. **Slot grid** from the plan start to the last exam: skip blocked days, skip
-   the exam's half on exam day, mark extra slots, mark one buffer half-day per
-   week (fixed, or automatic = afternoon of the last day of the week, avoiding
-   exam days and days before an exam).
+1. **Slot grid** from the plan start to the last exam: normal slots from the
+   weekly plan, skip blocked days, skip the exam's half on exam day, mark
+   extra slots (study days only), mark one buffer half-day per week (fixed, or
+   automatic = last study half-day of the week, avoiding exam days and days
+   before an exam – with the default week that's Sunday morning).
 2. **Reserve reviews first:** the last free slot before each exam (within 7
    days) becomes a review session: 10 % of the subject's effort, at least
    20 min, at most 60 % of a session. Done first so back-to-back exams each

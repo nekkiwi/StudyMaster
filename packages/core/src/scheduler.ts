@@ -10,7 +10,7 @@ import {
   splitChunk,
   totalMinutes,
 } from "./effort.js";
-import { buildSlotGrid, slotKey } from "./slots.js";
+import { allowsExtraSessions, buildSlotGrid, slotKey } from "./slots.js";
 import type {
   EscalationLevel,
   Plan,
@@ -446,7 +446,7 @@ export function escalationSteps(settings: StudyState["settings"]): Step[] {
       options: { examBufferDays: shortened, useWeeklyBuffer: true, useExtraSessions: false },
     });
   }
-  if (s.maxSessionsPerDay > s.preferredSessionsPerDay) {
+  if (allowsExtraSessions(s)) {
     steps.push({
       level: "extraSessions",
       options: {

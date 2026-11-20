@@ -205,7 +205,7 @@ function MaterialStep() {
 function WeekStep() {
   return (
     <div>
-      <StepHeader title="How do you like to study?">One session is 2–3 hours: lecture work first, then Anki for the new cards and earlier ones.</StepHeader>
+      <StepHeader title="How do you like to study?">Pick the half-days you study. One session is 2–3 hours: lecture work first, then Anki. The preset is weekday afternoons plus one half-day on Saturday and Sunday.</StepHeader>
       <div className="space-y-4">
         <Card>
           <RhythmSettings />

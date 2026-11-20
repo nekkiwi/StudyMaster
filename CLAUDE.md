@@ -62,8 +62,10 @@ apps/web/        React 19 + Vite 6 + Tailwind 4 PWA (zustand for state)
 ## How the planner works (short)
 
 1. Build slots from `from` to the last exam. Up to 4 per day: `am1, am2, pm1, pm2`.
-   Preferred count = `normal`, above that up to max = `extra`; one half-day per
-   week = `buffer` (catch-up reserve, empty unless needed).
+   `normal` slots come from the weekly plan (`settings.week`: 0/1/2 sessions
+   per morning/afternoon; default weekday afternoons + weekend mornings). On
+   study days, more slots up to `maxSessionsPerDay` are `extra`; free days get
+   none. One half-day per week = `buffer` (catch-up reserve, empty unless needed).
 2. Reserve a short review session in the last free slot before every exam
    (first, so back-to-back exams each get one).
 3. Walk slots in time order; each study session = lecture pieces, then an
