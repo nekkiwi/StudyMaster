@@ -1,6 +1,7 @@
 import { addDays, daysBetween, type Subject } from "@studymaster/core";
-import { BookMarked, Brain, Plus, Trash2 } from "lucide-react";
+import { BookMarked, Brain, Plus, Trash2, Upload } from "lucide-react";
 import { useState } from "react";
+import { ImportDialog } from "../components/importer";
 import { ChunkList, SubjectFields, WEIGHT_LABEL } from "../components/subjectForm";
 import { Badge, Button, Card, EmptyState, Modal, SubjectDot } from "../components/ui";
 import { nextColor } from "../lib/colors";
@@ -13,6 +14,7 @@ export function SubjectsView({ planner }: { planner: Planner }) {
   const subjects = useStore((s) => s.subjects);
   const upsertSubject = useStore((s) => s.upsertSubject);
   const [editing, setEditing] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
   const progress = subjectProgress(planner.state);
   const status = new Map(planner.shown.plan.subjects.map((s) => [s.subjectId, s]));
 
@@ -35,15 +37,21 @@ export function SubjectsView({ planner }: { planner: Planner }) {
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Subjects</h1>
           <p className="text-slate-500 dark:text-slate-400">Your exams and the material for each.</p>
         </div>
-        <Button onClick={add}>
-          <Plus size={16} /> Subject
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="secondary" onClick={() => setImporting(true)}>
+            <Upload size={16} /> Import
+          </Button>
+          <Button onClick={add}>
+            <Plus size={16} /> Subject
+          </Button>
+        </div>
       </header>
+      <ImportDialog open={importing} onClose={() => setImporting(false)} />
 
       {progress.length === 0 ? (
         <Card>
           <EmptyState icon={<BookMarked size={22} />} title="No subjects yet">
-            Add a subject with its exam date, then its lectures, chapters and slide decks.
+            Add a subject with its exam date, then its lectures, chapters and slide decks – or import a folder of slides, PDFs and videos.
           </EmptyState>
         </Card>
       ) : (

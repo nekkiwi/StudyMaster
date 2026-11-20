@@ -43,6 +43,30 @@ keeps the plan honest as real life happens.
 5. *Your plan:* summary – total hours, sessions, whether everything fits.
 "Try with example data" skips all of this for a quick look.
 
+**Material import** (wizard step 2 and Subjects → Import) – detect, then a
+human checks:
+1. Drop files or a whole folder, or paste a table of contents. Everything is
+   read on the device (pdf.js, fflate, the browser's video metadata) –
+   nothing is uploaded.
+2. Detection:
+   - **Subjects** from folders (`Biology/Lecture 3.pdf` → Biology), else from
+     the file name before the lecture number (`Bio_VL03.pdf` → Bio); matched to
+     existing subjects by name.
+   - **Book PDFs** (≥ 30 pages) with bookmarks → one chunk per chapter with
+     page counts (top level, or the level below when the top level is just
+     "Part I/II"). Contents, index, references etc. are found but unticked.
+   - **Slide PDFs** (landscape, or no bookmarks) and **PowerPoints** → one
+     lecture each with the slide count; portrait PDFs without bookmarks → pages.
+   - **Videos** → recording minutes; paired with slides that share the
+     lecture number (`Lecture 3.mp4` + `Lecture 3.pdf` → one lecture).
+   - **Pasted table of contents** → top-level chapters, page count from the
+     next chapter's start page (last one from "last page", else estimated
+     and flagged).
+3. **Review** (nothing is saved before this): per subject rename, "new
+   subject" or "add to <existing>", exam date for new subjects; per item
+   tick/untick, edit title, video minutes, pages, slides, "merge with above",
+   "move to" another subject. Skipped files are listed with the reason.
+
 **Every day** – open *Today*: the day's sessions, each a list of items:
 lecture pieces (🎬 watch · 📖 read · ✍️ write cards) and, at the end, 🃏 Anki. In the evening: *Did you finish
 today's plan?* **Yes / No**.

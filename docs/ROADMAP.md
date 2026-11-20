@@ -11,6 +11,9 @@
   example data, Today with check-in (Yes / No with partial progress, undo),
   calendar with overview heat map, subjects editor, settings, approval
   banner, backup export/import, offline PWA, dark mode.
+- ✅ **Material import**: folders / PDFs (bookmarks → chapters) / slides /
+  PowerPoint / videos / pasted table of contents → detected subjects and
+  lectures → review list (untick, edit, merge, move) → add.
 - ✅ Docs, `CLAUDE.md`, GitHub Actions CI (typecheck, tests, build).
 
 ## Next, in order

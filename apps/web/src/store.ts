@@ -12,8 +12,10 @@ import {
 } from "@studymaster/core";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { nextColor } from "./lib/colors";
 import { demoData } from "./lib/demo";
-import { todayISO } from "./lib/format";
+import { newId, todayISO } from "./lib/format";
+import type { Draft } from "./lib/importer";
 
 export interface CheckInRecord {
   answer: "yes" | "no";
@@ -54,6 +56,8 @@ interface Actions {
   removeSubject(id: string): void;
   upsertChunk(chunk: Chunk): void;
   addChunks(chunks: Chunk[]): void;
+  /** Adds the ticked subjects and chunks of a reviewed import. Returns what was added. */
+  importDraft(draft: Draft): { subjects: number; chunks: number };
   removeChunk(id: string): void;
   moveChunk(id: string, direction: -1 | 1): void;
 
@@ -124,6 +128,44 @@ export const useStore = create<Store>()(
             : [...s.chunks, chunk],
         })),
       addChunks: (chunks) => set((s) => ({ chunks: [...s.chunks, ...chunks] })),
+      importDraft: (draft) => {
+        const state = get();
+        const subjects = [...state.subjects];
+        const chunks = [...state.chunks];
+        let newSubjects = 0;
+        let added = 0;
+        for (const d of draft.subjects) {
+          const picked = d.chunks.filter((c) => c.include && c.title.trim());
+          if (!d.include || picked.length === 0) continue;
+          let subjectId = d.existingId && subjects.some((x) => x.id === d.existingId) ? d.existingId : undefined;
+          if (!subjectId) {
+            subjectId = newId();
+            subjects.push({
+              id: subjectId,
+              name: d.name.trim() || "New subject",
+              color: nextColor(subjects.map((x) => x.color)),
+              weight: 1,
+              examDate: d.examDate,
+            });
+            newSubjects++;
+          }
+          let order = Math.max(0, ...chunks.filter((c) => c.subjectId === subjectId).map((c) => c.order));
+          for (const c of picked) {
+            chunks.push({
+              id: newId(),
+              subjectId,
+              title: c.title.trim(),
+              recordingMinutes: Math.max(0, Math.round(c.recordingMinutes)),
+              pages: Math.max(0, Math.round(c.pages)),
+              slides: Math.max(0, Math.round(c.slides)),
+              order: ++order,
+            });
+            added++;
+          }
+        }
+        set({ subjects, chunks });
+        return { subjects: newSubjects, chunks: added };
+      },
       removeChunk: (id) => set((s) => ({ chunks: s.chunks.filter((x) => x.id !== id) })),
       moveChunk: (id, direction) =>
         set((s) => {

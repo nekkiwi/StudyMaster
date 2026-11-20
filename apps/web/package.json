@@ -12,7 +12,9 @@
   },
   "dependencies": {
     "@studymaster/core": "*",
+    "fflate": "^0.8.3",
     "lucide-react": "^0.468.0",
+    "pdfjs-dist": "^4.10.38",
     "react": "^19.1.10",
     "react-dom": "^19.1.10",
     "zustand": "^5.0.16"

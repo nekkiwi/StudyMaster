@@ -76,15 +76,21 @@ export function Field({ label, hint, group, children }: { label: string; hint?: 
   );
 }
 
-const INPUT =
-  "w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 dark:border-slate-700 dark:bg-slate-950 dark:focus:border-indigo-500";
+const INPUT_BASE =
+  "rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none transition placeholder:text-slate-400 focus:border-indigo-400 focus:ring-4 focus:ring-indigo-500/10 dark:border-slate-700 dark:bg-slate-950 dark:focus:border-indigo-500";
+
+/** Inputs are full width unless the caller sets its own width (w-…). */
+function inputClass(className?: string, extra?: string): string {
+  const ownWidth = /(^|\s)w-/.test(className ?? "");
+  return cx(INPUT_BASE, !ownWidth && "w-full", extra, className);
+}
 
 export function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
-  return <input {...props} className={cx(INPUT, props.className)} />;
+  return <input {...props} className={inputClass(props.className)} />;
 }
 
 export function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
-  return <textarea {...props} className={cx(INPUT, "font-mono", props.className)} />;
+  return <textarea {...props} className={inputClass(props.className, "font-mono")} />;
 }
 
 export function NumberInput({
@@ -118,7 +124,7 @@ export function NumberInput({
         if (e.target.value === "") onChange(min ?? 0);
         else if (Number.isFinite(n)) onChange(max !== undefined ? Math.min(max, n) : n);
       }}
-      className={cx(INPUT, "tabular-nums", className)}
+      className={inputClass(className, "tabular-nums")}
     />
   );
 }
@@ -135,7 +141,7 @@ export function Select<T extends string>({
   className?: string;
 }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value as T)} className={cx(INPUT, className)}>
+    <select value={value} onChange={(e) => onChange(e.target.value as T)} className={inputClass(className)}>
       {options.map((o) => (
         <option key={o.value} value={o.value}>
           {o.label}

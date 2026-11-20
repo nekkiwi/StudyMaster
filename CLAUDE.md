@@ -56,7 +56,10 @@ apps/web/        React 19 + Vite 6 + Tailwind 4 PWA (zustand for state)
   src/components/     ui.tsx (design-system primitives), session, checkin,
                       proposal (approval banner), subjectForm, settingsForm, toast
   src/lib/            format (dates, durations), bulk (quick chunk entry
-                      parser), stats, colors, demo data
+                      parser), stats, colors, demo data,
+                      importer (pure: files/TOC → draft subjects + chunks),
+                      fileReaders (browser: pdf.js, fflate, video length)
+  src/components/importer.tsx  Import dialog: choose → read → review → add
 ```
 
 ## How the planner works (short)

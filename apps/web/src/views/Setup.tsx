@@ -1,7 +1,8 @@
 import { addDays, planWithEscalation, type Subject } from "@studymaster/core";
-import { ArrowLeft, ArrowRight, CalendarDays, Check, GraduationCap, Layers, Plus, Sparkles, Trash2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, Check, GraduationCap, Layers, Plus, Sparkles, Trash2, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { BufferSettings, DaysOffEditor, RhythmSettings } from "../components/settingsForm";
+import { ImportDialog } from "../components/importer";
 import { ChunkList, SubjectFields } from "../components/subjectForm";
 import { Badge, Button, Card, cx, SubjectDot } from "../components/ui";
 import { nextColor } from "../lib/colors";
@@ -168,13 +169,19 @@ function MaterialStep() {
   const subjects = useStore((s) => s.subjects);
   const chunks = useStore((s) => s.chunks);
   const [active, setActive] = useState(subjects[0]?.id ?? "");
+  const [importing, setImporting] = useState(false);
   const subject = subjects.find((s) => s.id === active) ?? subjects[0];
 
   return (
     <div>
       <StepHeader title="What do you have to learn?">
-        Add the lectures for each subject: recording length, plus the slide deck or chapter that goes with it. Tip: "Add many at once" is fastest.
+        Add the lectures for each subject: recording length, plus the slide deck or chapter that goes with it. Fastest: import your folder of
+        slides, PDFs and videos – you check the list before anything is added.
       </StepHeader>
+      <Button variant="secondary" className="mb-4 w-full sm:w-auto" onClick={() => setImporting(true)}>
+        <Upload size={16} /> Import slides, PDFs or videos
+      </Button>
+      <ImportDialog open={importing} onClose={() => setImporting(false)} />
       <div className="mb-4 flex flex-wrap gap-2">
         {subjects.map((s) => {
           const count = chunks.filter((c) => c.subjectId === s.id).length;
