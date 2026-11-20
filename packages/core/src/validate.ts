@@ -41,6 +41,7 @@ export function validateState(state: StudyState): string[] {
   }
   if (s.maxChunksPerSession < 1) errors.push("At least 1 chunk per session is needed.");
   if (s.examBufferDays < 0) errors.push("Exam buffer days can't be negative.");
+  if (s.pacing !== "even" && s.pacing !== "early") errors.push('Pacing must be "even" or "early".');
   const when = s.weeklyBuffer.when;
   if (when !== "auto" && (when.weekday < 0 || when.weekday > 6)) {
     errors.push("Weekly buffer weekday must be 0 (Sunday) to 6 (Saturday).");

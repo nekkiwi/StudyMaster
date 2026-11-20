@@ -55,6 +55,23 @@ export function RhythmSettings() {
           <NumberInput min={10} max={400} value={s.maxSlidesPerChunk} onChange={(v) => update({ maxSlidesPerChunk: Math.max(10, Math.round(v)) })} />
         </Field>
       </div>
+      <Field
+        label="Pace"
+        hint={
+          s.pacing === "even"
+            ? "Work is spread steadily until each exam's finish date, so Anki keeps running."
+            : "Material is finished as early as possible; after that only reviews."
+        }
+      >
+        <Segmented
+          value={s.pacing}
+          onChange={(pacing) => update({ pacing })}
+          options={[
+            { value: "even", label: "Steady" },
+            { value: "early", label: "Finish early" },
+          ]}
+        />
+      </Field>
       <Field label="Finish main study before each exam" hint="The last days before an exam are for review only.">
         <Segmented
           value={s.examBufferDays}

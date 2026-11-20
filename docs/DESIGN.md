@@ -62,6 +62,11 @@ free time.
    fill the session (no leftovers under 30 min).
 4. Buffer and extra slots are only used by subjects that would not make it
    otherwise, and buffer comes before extra sessions.
+5. **Pacing** (setting): `even` (default) spreads each subject's work steadily
+   until its finish date, so there's study (and Anki) on most days. A subject
+   only takes a slot when it is behind its steady pace, or when time gets
+   tight, in which case it falls back to as-soon-as-possible. `early` finishes
+   material as soon as possible.
 
 `planWithEscalation(state, from)` tries, in order, and stops at the first
 plan that fits:
@@ -103,15 +108,40 @@ end-of-day check-in. Then the plan is rebuilt from the next day, and
 | Part | Choice |
 |---|---|
 | Planner | TypeScript, no dependencies, Vitest tests |
-| Web app | React + Vite + Tailwind + shadcn/ui, installable PWA |
+| Web app | React 19 + Vite 6 + Tailwind 4 + zustand, installable PWA (hand-made UI components in `components/ui.tsx`) |
 | Backend | Cloudflare Workers (API + MCP + cron for check-ins) + D1 |
 | Login | Google or email magic link |
 
 ## Roadmap
-1. ✅ `packages/core`: effort model with Anki, planner with reviews, buffers
-   and escalation, check-in, plan diff, validation, tests
-2. ✅ Web app (local-only first): setup wizard, Today view with check-in card,
-   calendar with buffer blocks, progress and exam countdowns, approval banner
-3. Backend: login, sync, cron + Web Push check-ins
-4. Built-in assistant (limits + spend cap)
-5. MCP connector + "Connect to Claude" page
+1. ✅ `packages/core`: effort model with Anki, planner with reviews, buffers,
+   escalation and pacing, check-in, plan diff, validation, tests
+2. ✅ Web app (local-only): setup wizard, Today view with check-in card,
+   calendar with buffer blocks, progress and exam countdowns, approval banner,
+   backup export/import, offline PWA, dark mode
+3. **Anki on free days**: add a short Anki-only session (e.g. 15–20 min) on
+   days without study before the last exam, so reviews never pause. Probably a
+   new `PlannedSession.type: "anki"` produced in `planOnce`, shown on Today and
+   in the calendar, not part of the Yes/No check-in.
+4. **Backend** (Cloudflare Workers + D1, free tier):
+   - Login (email magic link or Google), one row of app data per user;
+     keep the local-first store and sync it (last write wins is fine at first).
+   - Web Push: store push subscriptions; a Cron Trigger every 15 min sends the
+     check-in to users whose `checkInTime` has come (in their timezone).
+   - Notification actions **Yes / No**: switch vite-plugin-pwa to
+     `injectManifest` and handle `notificationclick` in a custom service worker
+     (Yes → POST the check-in; No → open `/#today` with the check-in sheet).
+   - iPhone: push only works after "Add to Home Screen" – show a hint.
+5. **Built-in assistant** ("Ask StudyMaster"): Worker endpoint with a
+   server-side LLM key. Tools: `add_subject`, `add_chunks`, `add_blocked_days`,
+   `update_settings`, `get_today`, `get_schedule`, `log_progress`, `replan`,
+   `what_if`. Writes go through the same approval rules. Per-user daily limit
+   and a monthly spend cap.
+6. **MCP server** on the same Worker (`/mcp`, OAuth) exposing the same tools,
+   plus a "Connect to Claude" page with the 3 steps.
+7. **Import with AI**: a copy-paste prompt for any chatbot that returns JSON
+   for subjects and chunks, plus an import screen.
+
+Smaller ideas: drag a chunk to another day; keep the plan more stable between
+re-plans (today currently re-plans from scratch); `.ics` calendar export;
+"realistic pace" factor learned from check-ins; German translation; Playwright
+end-to-end tests.

@@ -13,6 +13,7 @@ export const DEFAULT_SETTINGS: Settings = {
   maxSlidesPerChunk: 60,
   examBufferDays: 2,
   reviewShare: 0.1,
+  pacing: "even",
   rates: {
     readPerPage: 3,
     readPerSlide: 1,

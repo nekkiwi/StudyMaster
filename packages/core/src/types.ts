@@ -87,6 +87,13 @@ export interface WeeklyBuffer {
 
 export type SessionCount = 1 | 2 | 3 | 4;
 
+/**
+ * even  = spread each subject's work steadily until its finish date
+ *         (Anki keeps running every day, less cramming early on)
+ * early = finish material as soon as possible, then only reviews
+ */
+export type Pacing = "even" | "early";
+
 export interface Settings {
   /** Length of one session in minutes (2–3 h). */
   sessionMinutes: number;
@@ -102,6 +109,7 @@ export interface Settings {
   examBufferDays: number;
   /** Length of the pre-exam review session, as a share of the subject's effort. */
   reviewShare: number;
+  pacing: Pacing;
   rates: Rates;
   anki: AnkiSettings;
   weeklyBuffer: WeeklyBuffer;

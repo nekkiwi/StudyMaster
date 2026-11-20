@@ -136,7 +136,7 @@ describe("planOnce", () => {
   it("fills sessions instead of leaving half of them empty", () => {
     // 26 pages ≈ 163 min, more than the 140 min left next to the Anki block,
     // so chapters get cut and continue in the next session.
-    const st = state([subject("bio", "2026-12-20")], chunks("bio", 6, 26));
+    const st = state([subject("bio", "2026-12-20")], chunks("bio", 6, 26), { pacing: "early" });
     const plan = planOnce(st, MON, normal);
     const study = plan.sessions.filter((x) => x.type === "study");
     const full = study.slice(0, -1); // all but the last session
@@ -278,6 +278,36 @@ describe("validateState", () => {
     expect(errors).toMatch(/unknown subject/);
     expect(errors).toMatch(/needs pages or slides/);
     expect(errors).toMatch(/Max sessions/);
+  });
+});
+
+describe("pacing", () => {
+  const work = () => [...chunks("bio", 8), ...chunks("chem", 6, 0, 50)];
+  const subjects = () => [subject("bio", "2026-12-21"), subject("chem", "2026-12-22")];
+
+  it("early finishes material as soon as possible", () => {
+    const plan = planOnce(state(subjects(), work(), { pacing: "early" }), MON, normal);
+    const last = plan.subjects.map((s) => s.lastStudyDate!).sort().pop()!;
+    expect(last < "2026-12-02").toBe(true);
+  });
+
+  it("even spreads work until the finish date, with Anki on most days", () => {
+    const plan = planOnce(state(subjects(), work(), { pacing: "even" }), MON, normal);
+    expect(plan.feasible).toBe(true);
+    const bio = plan.subjects.find((s) => s.subjectId === "bio")!;
+    expect(bio.lastStudyDate! >= "2026-12-14").toBe(true);
+    const studyDays = new Set(plan.sessions.filter((s) => s.type === "study").map((s) => s.date));
+    expect(studyDays.size).toBeGreaterThanOrEqual(15); // vs. 6 days with "early"
+  });
+
+  it("even fits as much work as early when time is tight", () => {
+    const tight = (pacing: "even" | "early") =>
+      planWithEscalation(
+        state([subject("a", "2026-12-04"), subject("b", "2026-12-07")], [...chunks("a", 12), ...chunks("b", 10)], { pacing }),
+        MON,
+      );
+    expect(tight("even").level).toBe(tight("early").level);
+    expect(tight("even").plan.feasible).toBe(tight("early").plan.feasible);
   });
 });
 

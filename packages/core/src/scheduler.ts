@@ -193,6 +193,14 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
         let slack: number;
         if (slot.kind === "normal") {
           slack = capLeft + normalAhead - left;
+          // Even pacing: only take this slot if the subject is behind its
+          // steady pace, or if time is getting tight (then it's ASAP again).
+          if (s.pacing === "even" && slack > perSlot) {
+            const slotsTotal = prefixNormal[end]!;
+            const total = initialRemaining.get(subject.id)!;
+            const quota = slotsTotal > 0 ? (total * prefixNormal[index + 1]!) / slotsTotal : Infinity;
+            if (total - left >= quota - 1e-6) continue;
+          }
           // Fewer subject switches inside a session: stay with the current
           // subject unless another one is actually at risk (slack < 0).
           const current = items[items.length - 1]?.subjectId;

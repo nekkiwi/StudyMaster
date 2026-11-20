@@ -12,7 +12,10 @@ See [docs/DESIGN.md](docs/DESIGN.md) for how it works.
 - `apps/web` – the web app: setup wizard, Today with check-in, calendar,
   subjects, settings. Works offline and can be installed on phone and desktop.
   Data is stored on the device.
-- Backend (sync + push notifications), assistant and MCP connector – next
+- Next: Anki on free days, backend (sync + push notifications), built-in
+  assistant and MCP connector – see the roadmap in `docs/DESIGN.md`
+
+Working with Claude Code? `CLAUDE.md` has the commands, layout and conventions.
 
 ## Development
 
