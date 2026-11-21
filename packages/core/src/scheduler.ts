@@ -273,6 +273,10 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
         reviewMinutes: anki,
         learnMinutes: work.reduce((sum, x) => sum + x.learnMinutes, 0),
         newCards: work.reduce((sum, x) => sum + x.cards, 0),
+        lectures: work
+          .filter((x) => x.steps.cards > 0)
+          .map((x) => ({ subjectId: x.subjectId, title: x.baseTitle }))
+          .filter((x, i, all) => all.findIndex((y) => y.subjectId === x.subjectId && y.title === x.title) === i),
       });
       sessions.push({ ...slot, type: "study", items: [...work.map(roundItem), anki_] });
     }

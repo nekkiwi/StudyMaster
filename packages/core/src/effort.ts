@@ -24,7 +24,12 @@ export function isAnkiItem(item: PlanItem): boolean {
 export function ankiItem(
   slot: SlotId,
   decks: string[],
-  parts: { reviewMinutes: number; learnMinutes?: number; newCards?: number },
+  parts: {
+    reviewMinutes: number;
+    learnMinutes?: number;
+    newCards?: number;
+    lectures?: { subjectId: string; title: string }[];
+  },
 ): PlanItem {
   const learn = parts.learnMinutes ?? 0;
   const minutes = Math.round(parts.reviewMinutes + learn);
@@ -48,6 +53,7 @@ export function ankiItem(
       newCards: Math.round(parts.newCards ?? 0),
       learnMinutes: Math.round(learn),
       reviewMinutes: Math.round(parts.reviewMinutes),
+      lectures: parts.lectures ?? [],
     },
   };
 }

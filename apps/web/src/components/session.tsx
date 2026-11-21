@@ -31,6 +31,19 @@ export function ankiSearch(deckNames: string[], withNew = false): string {
   return `${parts.length > 1 ? `(${parts.join(" OR ")})` : parts[0]} ${which}`;
 }
 
+/**
+ * The Anki deck behind an Anki task: the lecture's own deck when the session
+ * wrote cards for exactly one lecture ("Biology::Lecture 3"), otherwise the
+ * subject deck ("Biology"), which includes all its lectures.
+ */
+export function deckToOpen(item: PlanItem, subjects: Map<string, Subject>): string {
+  const lectures = item.anki?.lectures ?? [];
+  const single = lectures.length === 1 ? lectures[0] : undefined;
+  const subjectName = subjects.get(single?.subjectId ?? item.decks?.[0] ?? "")?.name;
+  if (!subjectName) return "";
+  return single ? deckName(subjectName, single.title) : deckName(subjectName);
+}
+
 export function deckNames(item: PlanItem, subjects: Map<string, Subject>): string[] {
   return (item.decks ?? []).map((id) => subjects.get(id)?.name ?? "").filter(Boolean);
 }
@@ -112,7 +125,7 @@ function AnkiRow({ item, subjects, compact }: { item: PlanItem; subjects: Map<st
   const newCards = item.anki?.newCards ?? 0;
   const search = ankiSearch(names, newCards > 0);
   const openAnki = useOpenAnki();
-  const deck = names[0] ? deckName(names[0]) : "";
+  const deck = deckToOpen(item, subjects);
   const what =
     newCards > 0
       ? `Learn ~${newCards} new cards + review ${names.join(", ")}`
@@ -137,6 +150,7 @@ function AnkiRow({ item, subjects, compact }: { item: PlanItem; subjects: Map<st
             onClick={() => openAnki(deck)}
             className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-sky-500"
             aria-label={deck ? `Open ${deck} in Anki` : "Open Anki"}
+            title={deck ? `Opens “${deck}” in Anki` : "Opens Anki"}
           >
             <Play size={13} /> Anki
           </button>

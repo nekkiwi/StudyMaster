@@ -72,6 +72,22 @@ export async function signInWithGoogle(): Promise<void> {
   }
 }
 
+export async function signInWithApple(): Promise<void> {
+  const { auth, authMod } = await loadCloud();
+  const provider = new authMod.OAuthProvider("apple.com");
+  provider.addScope("email");
+  provider.addScope("name");
+  try {
+    await authMod.signInWithPopup(auth, provider);
+  } catch (e) {
+    if (errorCode(e) === "auth/popup-blocked" || errorCode(e) === "auth/operation-not-supported-in-this-environment") {
+      await authMod.signInWithRedirect(auth, provider);
+      return;
+    }
+    throw e;
+  }
+}
+
 export async function signInWithEmail(email: string, password: string): Promise<void> {
   const { auth, authMod } = await loadCloud();
   await authMod.signInWithEmailAndPassword(auth, email.trim(), password);

@@ -206,7 +206,13 @@ export interface PlanItem {
   /** Anki items: subjects whose decks to study, most important first. */
   decks?: string[];
   /** Anki items: what the time is for. */
-  anki?: { newCards: number; learnMinutes: number; reviewMinutes: number };
+  anki?: {
+    newCards: number;
+    learnMinutes: number;
+    reviewMinutes: number;
+    /** Lectures whose cards were written in this session (their decks are "Subject::Lecture"). */
+    lectures: { subjectId: string; title: string }[];
+  };
 }
 
 /**

@@ -1,7 +1,8 @@
 import { Cloud, CloudOff, Loader2, LogOut, RefreshCw, UserRound } from "lucide-react";
 import { useEffect, useState, type FormEvent } from "react";
 import { useAccount, type SyncState } from "../account";
-import { createAccount, errorMessage, sendReset, signInWithEmail, signInWithGoogle } from "../lib/cloud";
+import { createAccount, errorMessage, sendReset, signInWithApple, signInWithEmail, signInWithGoogle } from "../lib/cloud";
+import { appleSignInEnabled } from "../lib/firebaseConfig";
 import { formatShort } from "../lib/format";
 import { toast } from "./toast";
 import { Button, cx, Field, Modal, TextInput } from "./ui";
@@ -17,14 +18,22 @@ function GoogleLogo() {
   );
 }
 
-/** Sign in with Google or email + password; create an account; reset the password. */
+function AppleLogo() {
+  return (
+    <svg width="16" height="18" viewBox="0 0 814 1000" fill="currentColor" aria-hidden="true">
+      <path d="M788 341c-6 4-108 62-108 190 0 148 130 200 134 202-1 3-21 72-69 142-43 62-88 124-157 124s-87-40-166-40c-77 0-104 41-167 41s-107-58-157-129C40 788 0 662 0 543 0 352 124 251 246 251c65 0 119 43 160 43 39 0 100-45 174-45 28 0 129 2 196 92zM554 160c31-37 53-88 53-139 0-7-1-14-2-20-50 2-110 34-146 76-28 32-55 83-55 135 0 8 1 16 2 18 3 1 9 2 14 2 45 0 101-30 134-72z" />
+    </svg>
+  );
+}
+
+/** Sign in with Google, Apple (when enabled) or email + password; create an account; reset the password. */
 export function SignInDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const start = useAccount((s) => s.start);
   const status = useAccount((s) => s.status);
   const [mode, setMode] = useState<"signIn" | "create">("signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [busy, setBusy] = useState<"google" | "email" | "reset" | null>(null);
+  const [busy, setBusy] = useState<"google" | "apple" | "email" | "reset" | null>(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -76,6 +85,11 @@ export function SignInDialog({ open, onClose }: { open: boolean; onClose: () => 
         <Button variant="secondary" size="lg" className="w-full" onClick={() => void attempt("google", signInWithGoogle)} disabled={!!busy}>
           {busy === "google" ? <Loader2 size={18} className="animate-spin" /> : <GoogleLogo />} Continue with Google
         </Button>
+        {appleSignInEnabled && (
+          <Button variant="black" size="lg" className="w-full" onClick={() => void attempt("apple", signInWithApple)} disabled={!!busy}>
+            {busy === "apple" ? <Loader2 size={18} className="animate-spin" /> : <AppleLogo />} Continue with Apple
+          </Button>
+        )}
         <div className="flex items-center gap-3 text-xs text-slate-400">
           <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" /> or with email <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
         </div>

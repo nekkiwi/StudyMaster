@@ -50,6 +50,17 @@ little for secure password hashing – see decision #29.
 6. Project settings → Your apps → Web → register → copy the `firebaseConfig`
    values into `apps/web/src/lib/firebaseConfig.ts` (public values, not secrets).
 
+**Adding "Sign in with Apple" later** (needs the Apple Developer Program, $99/year):
+1. developer.apple.com → Certificates, IDs & Profiles: an **App ID** with
+   "Sign in with Apple", a **Services ID** (web) with the domain
+   `<project>.firebaseapp.com` and return URL
+   `https://<project>.firebaseapp.com/__/auth/handler`, and a **key** with
+   "Sign in with Apple" (note Team ID, Key ID, download the .p8 file).
+2. Firebase → Authentication → Sign-in method → **Apple**: enter the Services
+   ID, Team ID, Key ID and private key.
+3. Turn the button on: set `appleSignInEnabled` to `true` in
+   `apps/web/src/lib/firebaseConfig.ts` (or build with `VITE_APPLE_SIGN_IN=1`).
+
 **Local testing without the real project:**
 ```bash
 npm run emulators   # Firebase Auth + Firestore emulators (needs Java), uses firestore.rules

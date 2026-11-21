@@ -180,3 +180,15 @@ describe("Anki decks", () => {
     expect(deckName("Bio::Chem", 'Ch "1"')).toBe("Bio – Chem::Ch '1'");
   });
 });
+
+describe("which Anki deck a task opens", () => {
+  it("opens the lecture deck for one lecture, else the subject deck", async () => {
+    const { deckToOpen } = await import("../src/components/session.js");
+    const subjects = new Map([["bio", { id: "bio", name: "Biology", weight: 1 as const, examDate: "2026-12-20" }]]);
+    const anki = (lectures: { subjectId: string; title: string }[]) =>
+      ({ kind: "anki", decks: ["bio"], anki: { newCards: 5, learnMinutes: 3, reviewMinutes: 10, lectures } }) as never;
+    expect(deckToOpen(anki([{ subjectId: "bio", title: "Lecture 3" }]), subjects)).toBe("Biology::Lecture 3");
+    expect(deckToOpen(anki([]), subjects)).toBe("Biology");
+    expect(deckToOpen(anki([{ subjectId: "bio", title: "L1" }, { subjectId: "bio", title: "L2" }]), subjects)).toBe("Biology");
+  });
+});

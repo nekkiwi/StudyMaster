@@ -134,6 +134,16 @@ describe("planOnce", () => {
     }
   });
 
+  it("tells the Anki item which lectures got new cards in that session", () => {
+    const plan = planOnce(state([subject("bio", "2026-12-20")], chunks("bio", 6), { pacing: "early" }), MON, normal);
+    for (const session of plan.sessions.filter((x) => x.type === "study")) {
+      const anki = session.items[session.items.length - 1]!;
+      const written = work(session.items).filter((i) => i.steps.cards > 0).map((i) => i.baseTitle);
+      expect(anki.anki!.lectures.map((l) => l.title)).toEqual([...new Set(written)]);
+      expect(anki.anki!.lectures.every((l) => l.subjectId === "bio")).toBe(true);
+    }
+  });
+
   it("plans lectures as watch → read → write cards", () => {
     const lectures = chunks("bio", 4, 20).map((c) => ({ ...c, recordingMinutes: 60 }));
     const plan = planOnce(state([subject("bio", "2026-12-20")], lectures, { pacing: "early" }), MON, normal);

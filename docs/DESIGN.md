@@ -110,8 +110,9 @@ The real workflow: A) watch → read → write cards, then B) study Anki.
   weekly plan stay free.
 
 ### Connecting to the Anki app
-Each Anki task has an **▶ Anki** button that opens the subject's deck
-(`Subject`, with lectures as `Subject::Lecture` subdecks):
+Each Anki task has an **▶ Anki** button. It opens the **lecture's deck**
+(`Subject::Lecture`) when that session wrote cards for exactly one lecture,
+otherwise the **subject deck** (`Subject`, which includes all its lectures):
 
 | Device | What happens | How |
 |---|---|---|

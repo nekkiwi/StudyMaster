@@ -16,6 +16,12 @@ export const firebaseConfig = {
   appId: "",
 };
 
+/**
+ * "Continue with Apple". Needs an Apple Developer account ($99/year) and the
+ * Apple provider enabled in Firebase (see docs/HOSTING.md). Off until then.
+ */
+export const appleSignInEnabled = import.meta.env.VITE_APPLE_SIGN_IN === "1" || false;
+
 /** `VITE_FIREBASE_EMULATORS=1 npm run dev` uses local Firebase emulators. */
 export const useEmulators = import.meta.env.VITE_FIREBASE_EMULATORS === "1";
 
