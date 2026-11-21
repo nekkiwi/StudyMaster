@@ -247,7 +247,8 @@ export function reviewActions(raw: unknown[], data: AppData, plan: Plan, today: 
           .filter((f) => f.fraction > 0 && items.some((i) => i.chunkId === f.itemId && i.part === f.part));
         const parts = finished.map((f) => {
           const item = items.find((i) => i.chunkId === f.itemId && i.part === f.part)!;
-          return f.fraction >= 1 ? item.title : `${Math.round(f.fraction * 100)}% of ${item.title}`;
+          const name = `${data.subjects.find((x) => x.id === item.subjectId)?.name ?? ""} ${item.title}`.trim();
+          return f.fraction >= 1 ? name : `${Math.round(f.fraction * 100)}% of ${name}`;
         });
         const label = parts.length
           ? `Check-in ${formatShort(a.date)}: did ${parts.join(", ")} – the rest moves`

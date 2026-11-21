@@ -119,7 +119,10 @@ export async function askAssistant(client: Anthropic, message: string, context: 
   const messages: Anthropic.MessageParam[] = [];
   for (const turn of history.slice(-4)) messages.push({ role: turn.role, content: turn.text.slice(0, 2000) });
   if (messages[0]?.role === "assistant") messages.shift();
-  messages.push({ role: "user", content: `<plan>\n${context}\n</plan>\n\n${message}` });
+  messages.push({
+    role: "user",
+    content: `<plan>\n${context}\n</plan>\n\nLatest message (reply in the language of this message, whatever was used before):\n${message}`,
+  });
 
   const response = await client.messages.parse({
     model: MODEL,
