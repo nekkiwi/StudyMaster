@@ -117,3 +117,86 @@ export function structureFromDecks(names: string[]): { subject: string; lectures
   }
   return [...map.entries()].map(([subject, lectures]) => ({ subject, lectures }));
 }
+
+/** Top-level decks ("collections"), without Default and filtered decks. */
+export function collections(names: string[]): string[] {
+  return [...new Set(structureFromDecks(names).map((s) => s.subject))].sort((a, b) => a.localeCompare(b));
+}
+
+/** Direct sub-decks of a collection, as full names ("Biology::Lecture 3"). */
+export function subdecks(names: string[], collection: string): string[] {
+  const prefix = `${collection}::`;
+  const seen = new Set<string>();
+  for (const n of names) {
+    if (!n.startsWith(prefix)) continue;
+    const second = n.slice(prefix.length).split("::")[0]!.trim();
+    if (second) seen.add(`${prefix}${second}`);
+  }
+  return [...seen];
+}
+
+/** Last part of a deck name: "Biology::Lecture 3" → "Lecture 3". */
+export function leaf(deck: string): string {
+  return deck.split("::").pop()!.trim();
+}
+
+const normalize = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+const firstNumber = (s: string) => {
+  const m = s.match(/(\d{1,3})(?!\d)/);
+  return m ? Number(m[1]) : undefined;
+};
+const STOPWORDS = new Set(["and", "und", "the", "der", "die", "das", "with", "mit", "for", "für", "von", "and", "des", "lecture", "vorlesung", "chapter", "kapitel"]);
+const tokens = (s: string) =>
+  new Set(normalize(s).split(" ").filter((t) => t.length >= 3 && !/\d/.test(t) && !STOPWORDS.has(t)));
+
+/** How alike a chapter title and a deck name are, 0–1. */
+export function similarity(title: string, deck: string): number {
+  const a = normalize(title);
+  const b = normalize(leaf(deck));
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  let score = 0;
+  const na = firstNumber(a);
+  const nb = firstNumber(b);
+  if (na !== undefined && na === nb) score = 0.7;
+  if (na !== undefined && nb !== undefined && na !== nb) return 0; // "Lecture 2" is never "Lecture 3"
+  const ta = tokens(a);
+  const tb = tokens(b);
+  const shared = [...ta].filter((t) => tb.has(t)).length;
+  const smaller = Math.min(ta.size, tb.size);
+  if (smaller > 0 && shared > 0) score = Math.max(score, Math.min(0.95, score + (shared / smaller) * 0.65));
+  if (a.includes(b) || b.includes(a)) score = Math.max(score, 0.8);
+  return score;
+}
+
+/**
+ * Links chapters to sub-decks by similar names: same name, same lecture
+ * number, or shared words. Best pairs first, each deck used once.
+ * Returns chunkId → deck (only for confident matches).
+ */
+export function matchDecks(chunks: { id: string; title: string }[], decks: string[], threshold = 0.5): Map<string, string> {
+  const pairs: { id: string; deck: string; score: number }[] = [];
+  for (const c of chunks) for (const d of decks) {
+    const score = similarity(c.title, d);
+    if (score >= threshold) pairs.push({ id: c.id, deck: d, score });
+  }
+  pairs.sort((x, y) => y.score - x.score);
+  const out = new Map<string, string>();
+  const used = new Set<string>();
+  for (const p of pairs) {
+    if (out.has(p.id) || used.has(p.deck)) continue;
+    out.set(p.id, p.deck);
+    used.add(p.deck);
+  }
+  return out;
+}
+
+/** The deck a chapter's ▶ Anki opens: its link, else "Subject::Title". */
+export function deckForChunk(chunk: { title: string; ankiDeck?: string }, subject: { name: string; ankiDeck?: string }): string {
+  return chunk.ankiDeck ?? deckName(subject.ankiDeck ?? subject.name, chunk.title);
+}
+
+/** The deck for a whole subject: its link, else its name. */
+export function deckForSubject(subject: { name: string; ankiDeck?: string }): string {
+  return subject.ankiDeck ?? deckName(subject.name);
+}

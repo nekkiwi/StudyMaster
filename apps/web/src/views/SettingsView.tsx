@@ -7,6 +7,8 @@ import {
   DaysOffEditor,
   RateSettings,
   RhythmSettings,
+  WeekGrid,
+  SplittingSettings,
 } from "../components/settingsForm";
 import { AccountSection } from "../components/account";
 import { AnkiConnectSection } from "../components/ankiConnect";
@@ -80,13 +82,17 @@ export function SettingsView() {
         <p className="text-slate-500 dark:text-slate-400">Changes update your plan right away.</p>
       </header>
 
+      <Section title="When do you study?" description="Your normal week. Pick a preset, then adjust single half-days.">
+        <WeekGrid />
+      </Section>
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="space-y-6">
           <Section title="Account" description="Sign in to keep your plan safe and in sync on all your devices.">
             <AccountSection />
           </Section>
           <Section title="Study rhythm" description="How much you want to study on a normal day.">
-            <RhythmSettings />
+            <RhythmSettings week={false} />
           </Section>
           <Section title="Weekly buffer" description="Planned free time that doubles as a catch-up reserve.">
             <BufferSettings />
@@ -109,6 +115,9 @@ export function SettingsView() {
           </Section>
           <Section title="Anki timing" description="Every session ends with Anki: the new cards plus reviews." collapsible>
             <AnkiSettingsForm />
+          </Section>
+          <Section title="Splitting long material" description="When long chapters and slide decks are cut into parts." collapsible>
+            <SplittingSettings />
           </Section>
           <Section title="Time estimates" description="Recordings, reading and writing cards. Reading and cards are scaled by the subject weight." collapsible>
             <RateSettings />

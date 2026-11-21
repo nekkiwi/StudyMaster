@@ -1,9 +1,10 @@
-import { sessionMinutes, type ItemKind, type PlannedSession, type PlanItem, type Subject } from "@studymaster/core";
-import { BookOpen, Copy, Files, Layers, PenLine, Play, Presentation, RotateCcw, Video } from "lucide-react";
-import { deckName } from "../lib/anki";
-import { useOpenAnki } from "./ankiConnect";
+import { sessionMinutes, type Chunk, type ItemKind, type PlannedSession, type PlanItem, type Subject } from "@studymaster/core";
+import { BookOpen, Files, Layers, PenLine, Play, Presentation, RotateCcw, Video } from "lucide-react";
+import { useMemo } from "react";
+import { deckForChunk, deckForSubject } from "../lib/anki";
 import { formatMinutes, SLOT_LABEL } from "../lib/format";
-import { toast } from "./toast";
+import { useStore } from "../store";
+import { useOpenAnki } from "./ankiConnect";
 import { Badge, cx, SubjectDot } from "./ui";
 
 export const KIND_ICON: Record<ItemKind, typeof BookOpen> = {
@@ -22,39 +23,34 @@ export const KIND_LABEL: Record<ItemKind, string> = {
   anki: "Anki",
 };
 
-/** Anki search for these decks: due cards, plus new ones after writing cards. */
-export function ankiSearch(deckNames: string[], withNew = false): string {
-  const unique = [...new Set(deckNames)].filter(Boolean);
-  const which = withNew ? "(is:due OR is:new)" : "is:due";
-  if (unique.length === 0) return which;
-  const parts = unique.map((d) => `deck:"${d}*"`);
-  return `${parts.length > 1 ? `(${parts.join(" OR ")})` : parts[0]} ${which}`;
-}
-
 /**
- * The Anki deck behind an Anki task: the lecture's own deck when the session
- * wrote cards for exactly one lecture ("Biology::Lecture 3"), otherwise the
- * subject deck ("Biology"), which includes all its lectures.
+ * The Anki decks behind an Anki task. After writing cards: the linked deck of
+ * each lecture/chapter from this session ("Biology::VL03 Genetics"). Reviews
+ * only: the subject's deck. Each target opens exactly that deck.
  */
-export function deckToOpen(item: PlanItem, subjects: Map<string, Subject>): string {
-  const lectures = item.anki?.lectures ?? [];
-  const single = lectures.length === 1 ? lectures[0] : undefined;
-  const subjectName = subjects.get(single?.subjectId ?? item.decks?.[0] ?? "")?.name;
-  if (!subjectName) return "";
-  return single ? deckName(subjectName, single.title) : deckName(subjectName);
+export function decksToOpen(
+  item: PlanItem,
+  subjects: Map<string, Subject>,
+  chunks: Map<string, Pick<Chunk, "title" | "ankiDeck">>,
+): { label: string; deck: string }[] {
+  const out: { label: string; deck: string }[] = [];
+  for (const l of item.anki?.lectures ?? []) {
+    const subject = subjects.get(l.subjectId);
+    if (!subject) continue;
+    const chunk = chunks.get(l.chunkId) ?? { title: l.title };
+    out.push({ label: chunk.title, deck: deckForChunk(chunk, subject) });
+  }
+  if (out.length === 0) {
+    for (const id of item.decks ?? []) {
+      const subject = subjects.get(id);
+      if (subject) out.push({ label: subject.name, deck: deckForSubject(subject) });
+    }
+  }
+  return out.filter((x, i) => out.findIndex((y) => y.deck === x.deck) === i);
 }
 
 export function deckNames(item: PlanItem, subjects: Map<string, Subject>): string[] {
   return (item.decks ?? []).map((id) => subjects.get(id)?.name ?? "").filter(Boolean);
-}
-
-async function copy(text: string) {
-  try {
-    await navigator.clipboard.writeText(text);
-    toast("Anki search copied. Paste it into a Filtered Deck.", { tone: "success" });
-  } catch {
-    toast(text);
-  }
 }
 
 const SESSION_BADGE: Record<PlannedSession["type"], { label: string; tone: "indigo" | "slate" } | null> = {
@@ -121,41 +117,46 @@ export function SessionCard({
 }
 
 function AnkiRow({ item, subjects, compact }: { item: PlanItem; subjects: Map<string, Subject>; compact?: boolean }) {
+  const allChunks = useStore((s) => s.chunks);
+  const chunks = useMemo(() => new Map(allChunks.map((c) => [c.id, c])), [allChunks]);
   const names = deckNames(item, subjects);
   const newCards = item.anki?.newCards ?? 0;
-  const search = ankiSearch(names, newCards > 0);
   const openAnki = useOpenAnki();
-  const deck = deckToOpen(item, subjects);
+  const targets = decksToOpen(item, subjects, chunks);
   const what =
     newCards > 0
       ? `Learn ~${newCards} new cards + review ${names.join(", ")}`
       : `Review ${names.join(", ") || "due cards"}`;
+  const button = "inline-flex max-w-40 items-center gap-1 rounded-lg bg-sky-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-sky-500";
   return (
-    <li className="flex items-center gap-3 rounded-xl px-2 py-1.5">
+    <li className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl px-2 py-1.5">
       <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-sky-50 text-sky-600 dark:bg-sky-500/10 dark:text-sky-400">
         <Layers size={16} />
       </span>
       <div className="min-w-0 flex-1">
         <p className="text-sm font-medium">Anki</p>
         <p className="truncate text-xs text-slate-500 dark:text-slate-400">{what}</p>
-        {!compact && <p className="truncate font-mono text-[11px] text-slate-400">{search}</p>}
       </div>
       <span className="text-xs text-slate-500 tabular-nums">{formatMinutes(item.minutes)}</span>
-      {!compact && (
-        <>
-          <button onClick={() => copy(search)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800" aria-label="Copy Anki search">
-            <Copy size={15} />
-          </button>
+      {!compact &&
+        (targets.length <= 1 ? (
           <button
-            onClick={() => openAnki(deck)}
-            className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-sky-500"
-            aria-label={deck ? `Open ${deck} in Anki` : "Open Anki"}
-            title={deck ? `Opens “${deck}” in Anki` : "Opens Anki"}
+            onClick={() => openAnki(targets[0]?.deck ?? "")}
+            className={button}
+            aria-label={targets[0] ? `Open ${targets[0].deck} in Anki` : "Open Anki"}
+            title={targets[0] ? `Opens “${targets[0].deck}” in Anki` : "Opens Anki"}
           >
             <Play size={13} /> Anki
           </button>
-        </>
-      )}
+        ) : (
+          <div className="flex basis-full flex-wrap justify-end gap-1.5 pl-11">
+            {targets.map((t) => (
+              <button key={t.deck} onClick={() => openAnki(t.deck)} className={button} aria-label={`Open ${t.deck} in Anki`} title={`Opens “${t.deck}” in Anki`}>
+                <Play size={13} className="shrink-0" /> <span className="truncate">{t.label}</span>
+              </button>
+            ))}
+          </div>
+        ))}
     </li>
   );
 }

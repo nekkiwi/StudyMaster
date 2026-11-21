@@ -8,8 +8,9 @@ import {
   type Subject,
   type Weight,
 } from "@studymaster/core";
-import { ArrowDown, ArrowUp, Layers, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Layers, Link2, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
+import { deckForChunk } from "../lib/anki";
 import { parseBulk } from "../lib/bulk";
 import { SUBJECT_COLORS } from "../lib/colors";
 import { formatMinutes, newId } from "../lib/format";
@@ -109,7 +110,7 @@ export function ChunkList({ subject }: { subject: Subject }) {
             minutes={totalMinutes(chunk, subject, settings)}
             left={remainingMinutes(chunk, subject, settings)}
             cards={estimatedCards(chunk, settings)}
-            deck={`${subject.name}::${chunk.title}`}
+            deck={deckForChunk(chunk, subject)}
             first={index === 0}
             last={index === chunks.length - 1}
             onChange={upsertChunk}
@@ -196,7 +197,7 @@ function ChunkRow({
             </button>
           );
         })}
-        <label className="inline-flex items-center gap-1.5 text-xs text-slate-500" title="Anki cards written for this chunk">
+        <label className="inline-flex items-center gap-1.5 text-xs text-slate-500" title="Anki cards written for this item">
           <Layers size={13} />
           <span className="inline-block w-16">
           <NumberInput
@@ -211,7 +212,12 @@ function ChunkRow({
         </label>
         <span className="text-xs text-slate-400">{done ? "done" : `${formatMinutes(left)} left of ${formatMinutes(minutes)}`}</span>
         <span className="ml-auto flex items-center gap-0.5">
-          <span className="mr-2 hidden font-mono text-[10px] text-slate-400 sm:inline" title="Suggested Anki deck">{deck}</span>
+          <span
+            className={cx("mr-2 hidden items-center gap-1 font-mono text-[10px] sm:inline-flex", chunk.ankiDeck ? "text-sky-600 dark:text-sky-400" : "text-slate-400")}
+            title={chunk.ankiDeck ? "Linked Anki deck – ▶ Anki opens it" : "Anki deck name (not linked yet)"}
+          >
+            {chunk.ankiDeck && <Link2 size={11} />} {deck}
+          </span>
           <button type="button" disabled={first} onClick={() => onMove(-1)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30 dark:hover:bg-slate-800" aria-label="Move up">
             <ArrowUp size={15} />
           </button>

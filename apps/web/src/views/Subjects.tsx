@@ -1,6 +1,7 @@
 import { addDays, daysBetween, type Subject } from "@studymaster/core";
-import { BookMarked, Brain, Plus, Trash2, Upload } from "lucide-react";
+import { BookMarked, Brain, Layers, Plus, Trash2, Upload } from "lucide-react";
 import { useState } from "react";
+import { SubjectAnkiLink } from "../components/ankiConnect";
 import { ImportDialog } from "../components/importer";
 import { ChunkList, SubjectFields, WEIGHT_LABEL } from "../components/subjectForm";
 import { Badge, Button, Card, EmptyState, Modal, SubjectDot } from "../components/ui";
@@ -83,7 +84,7 @@ export function SubjectsView({ planner }: { planner: Planner }) {
                 </div>
                 <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
                   <span>{Math.round(p.fraction * 100)}% done</span>
-                  <span>{p.chunksDone}/{p.chunks} chunks</span>
+                  <span>{p.chunksDone}/{p.chunks} items done</span>
                   <span className="inline-flex items-center gap-1"><Brain size={12} /> {p.cardsMade}/{p.cardsEstimated} cards</span>
                   <span>{formatMinutes(p.remainingMinutes)} left</span>
                 </div>
@@ -144,6 +145,15 @@ function SubjectEditor({ id, onClose }: { id: string | null; onClose: () => void
           <div>
             <h3 className="mb-2 font-semibold">Material</h3>
             <ChunkList subject={subject} />
+          </div>
+          <div>
+            <h3 className="mb-1 flex items-center gap-2 font-semibold">
+              <Layers size={16} className="text-sky-600" /> Anki deck
+            </h3>
+            <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
+              Choose this subject's deck in Anki. Its sub-decks are matched to your lectures and chapters by name, so ▶ Anki opens exactly the right one.
+            </p>
+            <SubjectAnkiLink subject={subject} />
           </div>
         </div>
       )}

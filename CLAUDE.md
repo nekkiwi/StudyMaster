@@ -67,11 +67,13 @@ apps/web/        React 19 + Vite 6 + Tailwind 4 PWA (zustand for state)
                       parser), stats, colors, demo data,
                       importer (pure: files/TOC → draft subjects + chunks),
                       fileReaders (browser: pdf.js, fflate, video length),
-                      anki (AnkiConnect client, deck names, phone links),
+                      anki (AnkiConnect client, deck names, phone links,
+                      deck linking: collections/subdecks/matchDecks),
                       device (per-device settings, never synced),
                       cloud + firebaseConfig (Firebase, loaded on demand)
   src/components/importer.tsx  Import dialog: choose → read → review → add
-  src/components/ankiConnect.tsx  ▶ Anki button logic + Settings "Anki app"
+  src/components/ankiConnect.tsx  ▶ Anki button logic, Settings "Anki app",
+                      "From Anki" import picker, subject editor deck links
   src/components/account.tsx  Sign-in form (landing page + dialog), account chip/section
 ```
 

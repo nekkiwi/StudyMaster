@@ -16,7 +16,11 @@
   lectures → review list (untick, edit, merge, move) → add.
 - ✅ **Anki app**: ▶ Anki button per Anki task (desktop: exact deck via
   AnkiConnect; iPhone: AnkiMobile study link; Android: opens AnkiDroid),
-  connect desktop Anki, create decks, import subjects from Anki decks.
+  connect desktop Anki, create decks, **link subjects to Anki collections and
+  lectures to sub-decks** (set up from Anki, auto-match by name, fix by hand);
+  ▶ Anki opens exactly the linked deck.
+- ✅ Week grid with Mon–Sun columns and big presets; splitting limits only in
+  Settings, explained.
 - ✅ **Accounts + sync** (Firebase): Google and email/password sign-in,
   forgot-password emails, plan synced live across devices, "which plan to
   keep?" on first sign-in, sign-out removes data from the device. **Live**

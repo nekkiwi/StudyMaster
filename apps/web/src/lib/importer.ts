@@ -6,6 +6,7 @@
  * Everything here is pure – reading the files happens in fileReaders.ts.
  */
 import { addDays, type ISODate, type Subject } from "@studymaster/core";
+import { leaf, matchDecks, subdecks } from "./anki";
 
 /** What we learned from one file. */
 export interface DetectedFile {
@@ -42,6 +43,16 @@ export interface DraftChunk {
   note?: string;
   /** Lecture number found in the file name, used for sorting and pairing. */
   number?: number;
+  /** Linked Anki deck (imports from Anki). */
+  ankiDeck?: string;
+}
+
+/** An existing chapter that will be linked to an Anki deck. */
+export interface DraftLink {
+  chunkId: string;
+  title: string;
+  deck: string;
+  include: boolean;
 }
 
 export interface DraftSubject {
@@ -53,6 +64,12 @@ export interface DraftSubject {
   /** Only used for new subjects. */
   examDate: ISODate;
   chunks: DraftChunk[];
+  /** Linked Anki collection (imports from Anki). */
+  ankiDeck?: string;
+  /** Existing chapters of this subject that get linked to Anki decks. */
+  links?: DraftLink[];
+  /** All sub-decks of the linked collection (to rebuild links when the target changes). */
+  ankiSubdecks?: string[];
 }
 
 export interface Draft {
@@ -344,52 +361,68 @@ export function draftFromToc(text: string, subjectName: string, existing: Subjec
 }
 
 /**
- * Draft from Anki decks ("Subject::Lecture"). Lectures that StudyMaster already
- * has (same subject, same title) are left out. Sizes are unknown, so they're
- * left for the user to fill in.
+ * Draft from Anki collections (top-level decks). For each chosen collection:
+ * - the subject is the one already linked to it, a subject with a matching
+ *   name, or a new one;
+ * - sub-decks with a similar name to an existing chapter are linked to it;
+ * - the other sub-decks become new chapters, each linked to its deck.
  */
 export function draftFromAnki(
-  structure: { subject: string; lectures: string[] }[],
+  deckNames: string[],
+  chosen: string[],
   existing: Subject[],
+  existingChunks: ExistingChunk[],
   today: ISODate,
   defaultRecordingMinutes: number,
-  existingChunks: { subjectId: string; title: string }[] = [],
 ): Draft {
-  const known = (subjectId: string | undefined, title: string) =>
-    !!subjectId && existingChunks.some((c) => c.subjectId === subjectId && c.title.trim().toLowerCase() === title.trim().toLowerCase());
-  const fresh = structure.map((s) => {
-    const match = matchSubject(s.subject, existing);
-    return { ...s, match, lectures: s.lectures.filter((l) => !known(match?.id, l)), hadLectures: s.lectures.length > 0 };
+  const subjects = chosen.map((collection) => {
+    const match = existing.find((s) => s.ankiDeck === collection) ?? matchSubject(collection, existing);
+    const base: DraftSubject = {
+      id: draftId(),
+      include: true,
+      name: match?.name ?? collection,
+      examDate: addDays(today, 42),
+      chunks: [],
+      ankiDeck: collection,
+      ankiSubdecks: subdecks(deckNames, collection),
+    };
+    return ankiTarget(base, match, existingChunks, defaultRecordingMinutes);
   });
+  return { subjects, skipped: [] };
+}
+
+type ExistingChunk = { id: string; subjectId: string; title: string; ankiDeck?: string };
+
+/**
+ * (Re)builds an Anki draft subject for a target: an existing subject (its
+ * chapters get linked by similar names) or a new one (every sub-deck becomes
+ * a new item).
+ */
+export function ankiTarget(d: DraftSubject, target: Subject | undefined, existingChunks: ExistingChunk[], defaultRecordingMinutes: number): DraftSubject {
+  const decks = d.ankiSubdecks ?? [];
+  const own = target ? existingChunks.filter((c) => c.subjectId === target.id) : [];
+  const alreadyLinked = new Set(own.map((c) => c.ankiDeck).filter(Boolean));
+  const free = decks.filter((x) => !alreadyLinked.has(x));
+  const links = matchDecks(own.filter((c) => !c.ankiDeck), free);
+  const linkedDecks = new Set(links.values());
   return {
-    subjects: fresh
-      .filter((s) => s.lectures.length > 0)
-      .map((s) => {
-        const match = s.match;
-        return {
-          id: draftId(),
-          include: true,
-          name: match?.name ?? s.subject,
-          existingId: match?.id,
-          examDate: addDays(today, 42),
-          chunks: s.lectures.map((title) => ({
-            id: draftId(),
-            include: true,
-            title,
-            recordingMinutes: defaultRecordingMinutes,
-            pages: 0,
-            slides: 0,
-            sources: ["Anki deck"],
-            number: lectureNumber(title),
-            note: "add pages or slides",
-          })),
-        };
-      }),
-    skipped: fresh
-      .filter((s) => s.lectures.length === 0)
-      .map((s) => ({
-        name: s.subject,
-        reason: s.hadLectures ? "already in StudyMaster" : "Anki deck without lecture subdecks",
+    ...d,
+    existingId: target?.id,
+    name: target?.name ?? d.name,
+    links: own.filter((c) => links.has(c.id)).map((c) => ({ chunkId: c.id, title: c.title, deck: links.get(c.id)!, include: true })),
+    chunks: free
+      .filter((x) => !linkedDecks.has(x))
+      .map((deck) => ({
+        id: draftId(),
+        include: true,
+        title: leaf(deck),
+        recordingMinutes: defaultRecordingMinutes,
+        pages: 0,
+        slides: 0,
+        sources: [`Anki: ${deck}`],
+        number: lectureNumber(leaf(deck)),
+        note: "add pages or slides",
+        ankiDeck: deck,
       })),
   };
 }

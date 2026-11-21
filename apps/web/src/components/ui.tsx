@@ -165,14 +165,16 @@ export function Select<T extends string>({
   onChange,
   options,
   className,
+  "aria-label": ariaLabel,
 }: {
   value: T;
   onChange: (value: T) => void;
   options: { value: T; label: string }[];
   className?: string;
+  "aria-label"?: string;
 }) {
   return (
-    <select value={value} onChange={(e) => onChange(e.target.value as T)} className={inputClass(className)}>
+    <select value={value} aria-label={ariaLabel} onChange={(e) => onChange(e.target.value as T)} className={inputClass(className)}>
       {options.map((o) => (
         <option key={o.value} value={o.value}>
           {o.label}

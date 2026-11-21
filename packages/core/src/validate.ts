@@ -50,7 +50,7 @@ export function validateState(state: StudyState): string[] {
   if (s.sessionMinutes < 60 || s.sessionMinutes > 240) {
     errors.push("A session should be between 1 and 4 hours.");
   }
-  if (s.maxChunksPerSession < 1) errors.push("At least 1 chunk per session is needed.");
+  if (s.maxChunksPerSession < 1) errors.push("A session needs room for at least 1 lecture or chapter.");
   if (s.examBufferDays < 0) errors.push("Exam buffer days can't be negative.");
   if (s.pacing !== "even" && s.pacing !== "early") errors.push('Pacing must be "even" or "early".');
   if (s.rates.recordingFactor <= 0) errors.push("Recording factor must be above 0.");

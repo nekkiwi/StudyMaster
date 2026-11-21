@@ -1,19 +1,32 @@
-import { ArrowUpToLine, FileText, FolderOpen, ListTree, Loader2, Upload } from "lucide-react";
+import { ArrowUpToLine, FileText, FolderOpen, Layers, Link2, ListTree, Loader2, Upload } from "lucide-react";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { filesFromDrop, filesFromInput, readFiles, type PickedFile } from "../lib/fileReaders";
 import { todayISO } from "../lib/format";
-import { adoptEmptySubject, buildDraft, draftFromToc, mergeChunks, type Draft, type DraftChunk, type DraftSubject } from "../lib/importer";
+import { leaf } from "../lib/anki";
+import { adoptEmptySubject, ankiTarget, buildDraft, draftFromToc, mergeChunks, type Draft, type DraftChunk, type DraftSubject } from "../lib/importer";
 import { useStore } from "../store";
+import { AnkiCollectionPicker } from "./ankiConnect";
 import { toast } from "./toast";
 import { Badge, Button, cx, Field, Modal, NameInput, NumberInput, Segmented, Select, TextArea, TextInput } from "./ui";
 
+type Mode = "files" | "toc" | "anki";
 type Stage = { kind: "choose" } | { kind: "reading"; done: number; total: number; name: string } | { kind: "review"; draft: Draft };
 
 /**
  * Import material: files, folders or a pasted table of contents are turned
  * into subjects and chunks, then shown for review before anything is added.
  */
-export function ImportDialog({ open, onClose, initialDraft }: { open: boolean; onClose: () => void; initialDraft?: Draft }) {
+export function ImportDialog({
+  open,
+  onClose,
+  initialDraft,
+  initialMode = "files",
+}: {
+  open: boolean;
+  onClose: () => void;
+  initialDraft?: Draft;
+  initialMode?: Mode;
+}) {
   const subjects = useStore((s) => s.subjects);
   const importDraft = useStore((s) => s.importDraft);
   const [stage, setStage] = useState<Stage>({ kind: "choose" });
@@ -36,15 +49,22 @@ export function ImportDialog({ open, onClose, initialDraft }: { open: boolean; o
   };
 
   const draft = stage.kind === "review" ? stage.draft : undefined;
-  const picked = draft?.subjects.filter((s) => s.include).flatMap((s) => s.chunks.filter((c) => c.include)) ?? [];
+  const on = draft?.subjects.filter((s) => s.include) ?? [];
+  const picked = on.flatMap((s) => s.chunks.filter((c) => c.include));
+  const links = on.flatMap((s) => (s.links ?? []).filter((l) => l.include));
+  const linksDeck = on.some((s) => s.ankiDeck);
+  const applyLabel =
+    picked.length > 0
+      ? `Add ${picked.length} item${picked.length === 1 ? "" : "s"}${links.length ? ` · link ${links.length}` : ""}`
+      : links.length > 0
+        ? `Link ${links.length} item${links.length === 1 ? "" : "s"}`
+        : "Link deck";
 
   const apply = () => {
     if (!draft) return;
     const result = importDraft(draft);
-    toast(
-      `Added ${result.chunks} item${result.chunks === 1 ? "" : "s"}${result.subjects ? ` and ${result.subjects} new subject${result.subjects === 1 ? "" : "s"}` : ""}.`,
-      { tone: "success" },
-    );
+    const added = `Added ${result.chunks} item${result.chunks === 1 ? "" : "s"}${result.subjects ? ` and ${result.subjects} new subject${result.subjects === 1 ? "" : "s"}` : ""}`;
+    toast(result.chunks || result.subjects ? `${added}.` : "Linked to Anki.", { tone: "success" });
     close();
   };
 
@@ -60,14 +80,14 @@ export function ImportDialog({ open, onClose, initialDraft }: { open: boolean; o
             <Button variant="ghost" onClick={() => setStage({ kind: "choose" })}>
               Back
             </Button>
-            <Button onClick={apply} disabled={picked.length === 0}>
-              Add {picked.length} item{picked.length === 1 ? "" : "s"}
+            <Button onClick={apply} disabled={picked.length === 0 && links.length === 0 && !linksDeck}>
+              {applyLabel}
             </Button>
           </>
         ) : undefined
       }
     >
-      {stage.kind === "choose" && <Choose onFiles={read} onToc={(d) => setStage({ kind: "review", draft: d })} />}
+      {stage.kind === "choose" && <Choose initialMode={initialMode} onFiles={read} onToc={(d) => setStage({ kind: "review", draft: d })} />}
       {stage.kind === "reading" && (
         <div className="flex flex-col items-center gap-3 py-12 text-center">
           <Loader2 className="animate-spin text-indigo-600" size={28} />
@@ -83,9 +103,9 @@ export function ImportDialog({ open, onClose, initialDraft }: { open: boolean; o
   );
 }
 
-function Choose({ onFiles, onToc }: { onFiles: (files: PickedFile[]) => void; onToc: (draft: Draft) => void }) {
+function Choose({ initialMode, onFiles, onToc }: { initialMode: Mode; onFiles: (files: PickedFile[]) => void; onToc: (draft: Draft) => void }) {
   const subjects = useStore((s) => s.subjects);
-  const [mode, setMode] = useState<"files" | "toc">("files");
+  const [mode, setMode] = useState<Mode>(initialMode);
   const [dragging, setDragging] = useState(false);
   const files = useRef<HTMLInputElement>(null);
   const folder = useRef<HTMLInputElement>(null);
@@ -107,9 +127,12 @@ function Choose({ onFiles, onToc }: { onFiles: (files: PickedFile[]) => void; on
         options={[
           { value: "files", label: "Files or folders" },
           { value: "toc", label: "Table of contents" },
+          { value: "anki", label: "From Anki" },
         ]}
       />
-      {mode === "files" ? (
+      {mode === "anki" ? (
+        <AnkiCollectionPicker onDraft={onToc} />
+      ) : mode === "files" ? (
         <>
           <div
             onDragOver={(e) => {
@@ -207,6 +230,8 @@ function Choose({ onFiles, onToc }: { onFiles: (files: PickedFile[]) => void; on
 
 function Review({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => void }) {
   const existing = useStore((s) => s.subjects);
+  const existingChunks = useStore((s) => s.chunks);
+  const defaultRecording = useStore((s) => s.settings.defaultRecordingMinutes);
   const total = draft.subjects.reduce((a, s) => a + s.chunks.length, 0);
 
   const setSubject = (id: string, patch: Partial<DraftSubject>) =>
@@ -243,16 +268,23 @@ function Review({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => voi
     });
   };
 
-  if (draft.subjects.length === 0) {
+  if (draft.subjects.length === 0 || (total === 0 && !draft.subjects.some((s) => s.ankiDeck))) {
     return <p className="py-8 text-center text-slate-500">Nothing to import was found.</p>;
   }
 
   return (
     <div className="space-y-5">
-      <p className="text-sm text-slate-600 dark:text-slate-400">
-        Found {total} item{total === 1 ? "" : "s"} in {draft.subjects.length} subject{draft.subjects.length === 1 ? "" : "s"}. Untick what you don't
-        need, fix names and numbers, or merge items (e.g. a recording and its slides). Nothing is added until you confirm.
-      </p>
+      {draft.subjects.some((s) => s.ankiDeck) ? (
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          Sub-decks with a name like one of your lectures or chapters are linked to it; the others become new items. Untick what you don't want, or
+          choose another subject. Nothing changes until you confirm.
+        </p>
+      ) : (
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          Found {total} item{total === 1 ? "" : "s"} in {draft.subjects.length} subject{draft.subjects.length === 1 ? "" : "s"}. Untick what you don't
+          need, fix names and numbers, or merge items (e.g. a recording and its slides). Nothing is added until you confirm.
+        </p>
+      )}
 
       {draft.subjects.map((subject) => {
         const on = subject.chunks.filter((c) => c.include).length;
@@ -272,7 +304,14 @@ function Review({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => voi
               <Select
                 className="w-full sm:w-52"
                 value={subject.existingId ?? ""}
-                onChange={(v) => setSubject(subject.id, { existingId: v || undefined, ...(v ? { name: existing.find((x) => x.id === v)?.name ?? subject.name } : {}) })}
+                onChange={(v) => {
+                  const target = existing.find((x) => x.id === v);
+                  // Anki decks: re-match the sub-decks against the new target's items.
+                  if (subject.ankiSubdecks) {
+                    const next = ankiTarget(subject, target, existingChunks, defaultRecording);
+                    setSubject(subject.id, target ? next : { ...next, name: subject.ankiDeck ?? subject.name });
+                  } else setSubject(subject.id, { existingId: v || undefined, ...(target ? { name: target.name } : {}) });
+                }}
                 options={[{ value: "", label: "New subject" }, ...existing.map((x) => ({ value: x.id, label: `Add to ${x.name}` }))]}
               />
               {!subject.existingId && (
@@ -281,10 +320,43 @@ function Review({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => voi
                   <TextInput type="date" className="w-auto py-1.5" value={subject.examDate} onChange={(e) => e.target.value && setSubject(subject.id, { examDate: e.target.value })} />
                 </label>
               )}
-              <span className="text-xs text-slate-500">
-                {on}/{subject.chunks.length} selected
-              </span>
+              {subject.chunks.length > 0 && (
+                <span className="text-xs text-slate-500">
+                  {on}/{subject.chunks.length} selected
+                </span>
+              )}
+              {subject.ankiDeck && (
+                <span className="flex basis-full items-center gap-1.5 text-xs text-slate-500">
+                  <Layers size={13} /> Anki deck <span className="font-mono">{subject.ankiDeck}</span>
+                </span>
+              )}
             </header>
+            {(subject.links?.length ?? 0) > 0 && (
+              <div className="border-b border-slate-100 p-3 dark:border-slate-800">
+                <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300">
+                  <Link2 size={13} /> Already in {subject.name} – linked by similar name
+                </p>
+                <ul className="space-y-1.5">
+                  {subject.links!.map((l) => (
+                    <li key={l.chunkId}>
+                      <label className={cx("flex items-center gap-2 text-sm", !l.include && "opacity-50")}>
+                        <input
+                          type="checkbox"
+                          checked={l.include}
+                          onChange={(e) =>
+                            setSubject(subject.id, { links: subject.links!.map((x) => (x.chunkId === l.chunkId ? { ...x, include: e.target.checked } : x)) })
+                          }
+                          className="h-4 w-4 shrink-0 accent-indigo-600"
+                        />
+                        <span className="min-w-0 truncate">{l.title}</span>
+                        <span className="text-slate-400">↔</span>
+                        <span className="min-w-0 truncate font-mono text-xs text-slate-500">{leaf(l.deck)}</span>
+                      </label>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <ul className="divide-y divide-slate-100 dark:divide-slate-800">
               {subject.chunks.map((chunk, i) => (
                 <li key={chunk.id} className={cx("space-y-2 p-3", !chunk.include && "opacity-50")}>

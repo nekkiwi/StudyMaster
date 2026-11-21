@@ -135,43 +135,74 @@ describe("buildDraft", () => {
 describe("Anki decks", () => {
   it("turns Subject::Lecture decks into subjects and lectures", async () => {
     const { structureFromDecks } = await import("../src/lib/anki.js");
-    const { draftFromAnki } = await import("../src/lib/importer.js");
-    const structure = structureFromDecks([
-      "Default",
-      "Biology",
-      "Biology::Lecture 1",
-      "Biology::Lecture 2",
-      "Biology::Lecture 2::Extra",
-      "Spanish",
-    ]);
+    const structure = structureFromDecks(["Default", "Biology", "Biology::Lecture 1", "Biology::Lecture 2", "Biology::Lecture 2::Extra", "Spanish"]);
     expect(structure).toEqual([
       { subject: "Biology", lectures: ["Lecture 1", "Lecture 2"] },
       { subject: "Spanish", lectures: [] },
     ]);
-    const draft = draftFromAnki(structure, [], TODAY, 60);
-    expect(draft.subjects[0]!.chunks.map((c) => [c.title, c.recordingMinutes])).toEqual([
-      ["Lecture 1", 60],
-      ["Lecture 2", 60],
-    ]);
-    expect(draft.skipped).toEqual([{ name: "Spanish", reason: "Anki deck without lecture subdecks" }]);
   });
 
-  it("leaves out lectures StudyMaster already has", async () => {
+  it("sets up a new subject from a collection, each sub-deck linked", async () => {
     const { draftFromAnki } = await import("../src/lib/importer.js");
-    const existing = [{ id: "bio", name: "Biology", weight: 1 as const, examDate: "2026-12-20" }];
-    const draft = draftFromAnki(
-      [{ subject: "Biology", lectures: ["Lecture 1", "Lecture 2"] }, { subject: "Anatomy", lectures: ["Bones"] }],
-      existing,
-      TODAY,
-      60,
-      [{ subjectId: "bio", title: "Lecture 1" }],
-    );
-    expect(draft.subjects.map((s) => [s.name, s.chunks.map((c) => c.title)])).toEqual([
-      ["Biology", ["Lecture 2"]],
-      ["Anatomy", ["Bones"]],
+    const names = ["Biology", "Biology::VL01 Intro", "Biology::VL02 Cells", "Biology::VL02 Cells::Extra", "Spanish"];
+    const draft = draftFromAnki(names, ["Biology"], [], [], TODAY, 60);
+    const s = draft.subjects[0]!;
+    expect(s).toMatchObject({ name: "Biology", ankiDeck: "Biology", existingId: undefined, links: [] });
+    expect(s.chunks.map((c) => [c.title, c.ankiDeck, c.recordingMinutes])).toEqual([
+      ["VL01 Intro", "Biology::VL01 Intro", 60],
+      ["VL02 Cells", "Biology::VL02 Cells", 60],
     ]);
-    const none = draftFromAnki([{ subject: "Biology", lectures: ["Lecture 1"] }], existing, TODAY, 60, [{ subjectId: "bio", title: "Lecture 1" }]);
-    expect(none.skipped).toEqual([{ name: "Biology", reason: "already in StudyMaster" }]);
+  });
+
+  it("links existing chapters by similar names and only adds the rest", async () => {
+    const { draftFromAnki, ankiTarget } = await import("../src/lib/importer.js");
+    const existing = [{ id: "bio", name: "Biology", weight: 1 as const, examDate: "2026-12-20" }];
+    const chunks = [
+      { id: "c1", subjectId: "bio", title: "Lecture 1" },
+      { id: "c2", subjectId: "bio", title: "Genetics" },
+    ];
+    const names = ["Bio WS26", "Bio WS26::VL01 Introduction", "Bio WS26::VL02 Cells", "Bio WS26::VL03 Genetics"];
+    const draft = draftFromAnki(names, ["Bio WS26"], existing, chunks, TODAY, 60);
+    const s = draft.subjects[0]!;
+    // "Bio WS26" shares no full word with "Biology" → new subject first …
+    expect(s.existingId).toBeUndefined();
+    // … the user picks "Add to Biology" in the review: links are rebuilt.
+    const t = ankiTarget(s, existing[0], chunks, 60);
+    expect(t.existingId).toBe("bio");
+    expect(t.links!.map((l) => [l.title, l.deck])).toEqual([
+      ["Lecture 1", "Bio WS26::VL01 Introduction"],
+      ["Genetics", "Bio WS26::VL03 Genetics"],
+    ]);
+    expect(t.chunks.map((c) => c.title)).toEqual(["VL02 Cells"]);
+  });
+
+  it("applies links and the collection when importing", async () => {
+    const { useStore } = await import("../src/store.js");
+    useStore.setState({
+      subjects: [{ id: "bio", name: "Biology", weight: 1, examDate: "2026-12-20" }],
+      chunks: [{ id: "c1", subjectId: "bio", title: "Lecture 1", pages: 10, slides: 0, order: 1 }],
+    });
+    useStore.getState().importDraft({
+      skipped: [],
+      subjects: [
+        {
+          id: "d",
+          include: true,
+          name: "Biology",
+          existingId: "bio",
+          examDate: TODAY,
+          ankiDeck: "Bio",
+          links: [{ chunkId: "c1", title: "Lecture 1", deck: "Bio::VL01", include: true }],
+          chunks: [{ id: "x", include: true, title: "VL02", recordingMinutes: 60, pages: 0, slides: 0, sources: [], ankiDeck: "Bio::VL02" }],
+        },
+      ],
+    });
+    const st = useStore.getState();
+    expect(st.subjects[0]!.ankiDeck).toBe("Bio");
+    expect(st.chunks.map((c) => [c.title, c.ankiDeck])).toEqual([
+      ["Lecture 1", "Bio::VL01"],
+      ["VL02", "Bio::VL02"],
+    ]);
   });
 
   it("names decks Subject::Lecture without breaking Anki's separator", async () => {
@@ -182,14 +213,21 @@ describe("Anki decks", () => {
 });
 
 describe("which Anki deck a task opens", () => {
-  it("opens the lecture deck for one lecture, else the subject deck", async () => {
-    const { deckToOpen } = await import("../src/components/session.js");
-    const subjects = new Map([["bio", { id: "bio", name: "Biology", weight: 1 as const, examDate: "2026-12-20" }]]);
-    const anki = (lectures: { subjectId: string; title: string }[]) =>
+  it("opens each lecture's linked deck, else the subject deck", async () => {
+    const { decksToOpen } = await import("../src/components/session.js");
+    const subjects = new Map([["bio", { id: "bio", name: "Biology", weight: 1 as const, examDate: "2026-12-20", ankiDeck: "Bio WS26" }]]);
+    const chunks = new Map([
+      ["c3", { title: "Lecture 3", ankiDeck: "Bio WS26::VL03 Genetics" }],
+      ["c4", { title: "Lecture 4" }],
+    ]);
+    const anki = (lectures: { chunkId: string; subjectId: string; title: string }[]) =>
       ({ kind: "anki", decks: ["bio"], anki: { newCards: 5, learnMinutes: 3, reviewMinutes: 10, lectures } }) as never;
-    expect(deckToOpen(anki([{ subjectId: "bio", title: "Lecture 3" }]), subjects)).toBe("Biology::Lecture 3");
-    expect(deckToOpen(anki([]), subjects)).toBe("Biology");
-    expect(deckToOpen(anki([{ subjectId: "bio", title: "L1" }, { subjectId: "bio", title: "L2" }]), subjects)).toBe("Biology");
+    const decks = (l: Parameters<typeof anki>[0]) => decksToOpen(anki(l), subjects, chunks).map((x) => x.deck);
+    expect(decks([{ chunkId: "c3", subjectId: "bio", title: "Lecture 3" }])).toEqual(["Bio WS26::VL03 Genetics"]);
+    // Not linked: falls back to "Collection::Title".
+    expect(decks([{ chunkId: "c4", subjectId: "bio", title: "Lecture 4" }])).toEqual(["Bio WS26::Lecture 4"]);
+    expect(decks([])).toEqual(["Bio WS26"]);
+    expect(decks([{ chunkId: "c3", subjectId: "bio", title: "L3" }, { chunkId: "c4", subjectId: "bio", title: "L4" }])).toHaveLength(2);
   });
 });
 

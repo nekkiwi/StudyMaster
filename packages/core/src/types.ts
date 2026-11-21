@@ -22,6 +22,8 @@ export interface Subject {
   examDate: ISODate;
   /** When the exam takes place on exam day. Defaults to "am". */
   examHalf?: Half;
+  /** Linked Anki deck (collection), e.g. "Biology". */
+  ankiDeck?: string;
 }
 
 /**
@@ -47,6 +49,8 @@ export interface Chunk {
   cards?: number;
   /** Fraction (0–1) of each step already done. Missing = 0. */
   done?: Partial<Record<StepKey, number>>;
+  /** Linked Anki deck, e.g. "Biology::Lecture 3 – Genetics". */
+  ankiDeck?: string;
 }
 
 export type BlockReason = "vacation" | "sick" | "break" | "other";
@@ -210,8 +214,8 @@ export interface PlanItem {
     newCards: number;
     learnMinutes: number;
     reviewMinutes: number;
-    /** Lectures whose cards were written in this session (their decks are "Subject::Lecture"). */
-    lectures: { subjectId: string; title: string }[];
+    /** Lectures whose cards were written in this session. */
+    lectures: { chunkId: string; subjectId: string; title: string }[];
   };
 }
 

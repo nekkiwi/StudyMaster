@@ -136,7 +136,8 @@ export const useStore = create<Store>()(
         let added = 0;
         for (const d of draft.subjects) {
           const picked = d.chunks.filter((c) => c.include && c.title.trim());
-          if (!d.include || picked.length === 0) continue;
+          const links = (d.links ?? []).filter((l) => l.include);
+          if (!d.include || (picked.length === 0 && links.length === 0 && !d.ankiDeck)) continue;
           let subjectId = d.existingId && subjects.some((x) => x.id === d.existingId) ? d.existingId : undefined;
           if (!subjectId) {
             subjectId = newId();
@@ -146,8 +147,16 @@ export const useStore = create<Store>()(
               color: nextColor(subjects.map((x) => x.color)),
               weight: 1,
               examDate: d.examDate,
+              ...(d.ankiDeck ? { ankiDeck: d.ankiDeck } : {}),
             });
             newSubjects++;
+          } else if (d.ankiDeck) {
+            const i = subjects.findIndex((x) => x.id === subjectId);
+            subjects[i] = { ...subjects[i]!, ankiDeck: d.ankiDeck };
+          }
+          for (const l of links) {
+            const i = chunks.findIndex((c) => c.id === l.chunkId);
+            if (i >= 0) chunks[i] = { ...chunks[i]!, ankiDeck: l.deck };
           }
           let order = Math.max(0, ...chunks.filter((c) => c.subjectId === subjectId).map((c) => c.order));
           for (const c of picked) {
@@ -159,6 +168,7 @@ export const useStore = create<Store>()(
               pages: Math.max(0, Math.round(c.pages)),
               slides: Math.max(0, Math.round(c.slides)),
               order: ++order,
+              ...(c.ankiDeck ? { ankiDeck: c.ankiDeck } : {}),
             });
             added++;
           }

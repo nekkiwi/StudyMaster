@@ -28,7 +28,7 @@ export function ankiItem(
     reviewMinutes: number;
     learnMinutes?: number;
     newCards?: number;
-    lectures?: { subjectId: string; title: string }[];
+    lectures?: { chunkId: string; subjectId: string; title: string }[];
   },
 ): PlanItem {
   const learn = parts.learnMinutes ?? 0;

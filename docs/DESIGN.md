@@ -35,10 +35,16 @@ keeps the plan honest as real life happens.
 2. *Material:* lectures with recording length plus slide deck and/or
    chapter (pages, slides). Quick entry like `Lecture 1-8: 40, 35, …` (with a
    "recording per lecture" default) or `Lecture 3: 45 slides 90min`.
-3. *Your week:* a Mon–Sun grid – which mornings / afternoons you study
-   (0, 1 or 2 sessions each). **Preset: weekday afternoons + one half-day
-   (the morning) on Saturday and Sunday**, 2 sessions each. Plus max
-   sessions on a busy day, session length, pace, chunk limits, weekly buffer.
+3. *Your week:* big preset buttons on top (weekday afternoons + weekend
+   mornings · weekday afternoons only · every day), below a grid with
+   **Mon–Sun as columns and Morning / Afternoon as rows**; each cell has
+   – / 1 / 2 side by side (scrolls sideways on phones, row labels stay).
+   **Preset: weekday afternoons + one half-day (the morning) on Saturday and
+   Sunday**, 2 sessions each. Plus max sessions on a busy day, session
+   length, pace, weekly buffer. The splitting limits (items per session, max
+   pages / slides before a chapter or deck is split) are **not** in the
+   wizard – only in Settings → "Splitting long material", with an
+   explanation. The UI says "item" / "lecture or chapter", never "chunk".
 4. *Days off:* vacation, breaks, other blocked days.
 5. *Your plan:* summary – total hours, sessions, whether everything fits.
 "Try with example data" skips all of this for a quick look.
@@ -107,18 +113,39 @@ The real workflow: A) watch → read → write cards, then B) study Anki.
   session, at most 30 % of a session. Learning time comes on top and is
   reserved when the lecture piece is planned, so sessions don't overflow.
 - It's a normal item: listed with its minutes, ticked in the check-in
-  ("Done"). A copyable Anki search for a Filtered Deck, e.g.
-  `(deck:"Chemistry*" OR deck:"Biology*") (is:due OR is:new)`.
-  Suggested deck naming in Anki: `Subject::Chunk title`.
+  ("Done"). (The copyable Filtered-Deck search was removed – it confused
+  people; ▶ Anki opens the linked deck instead.)
 - **Study days without study work** (e.g. with steady pacing; not blocked,
   not an exam day, not the buffer) get a short **Anki-only session**
   (≥ 15 min), so reviews never pause. Only once cards exist. Free days in the
   weekly plan stay free.
 
+### Linking subjects and lectures to Anki decks
+- A subject can be **linked to an Anki deck** (`Subject.ankiDeck`, a
+  top-level deck = "collection", e.g. `Bio WS26`), and each lecture/chapter
+  to one of its **sub-decks** (`Chunk.ankiDeck`, e.g. `Bio WS26::VL03 Genetics`).
+- **Matching by name** (`lib/anki.ts` → `similarity`, `matchDecks`): same
+  name, same lecture number ("Lecture 3" ↔ "VL03 …"; different numbers never
+  match), or shared words (overlap of the smaller set, without stop words
+  like "lecture", "chapter", "and"). Best pairs first, each deck used once.
+- **Set up a subject from Anki** (Import → "From Anki", or Settings → Anki →
+  "Set up subjects from Anki"): pick collections; each becomes a subject (or
+  goes into an existing one: already linked, or with a matching name); sub-
+  decks similar to existing items are **linked**, the rest become **new
+  items** (each linked). Everything goes through the usual review list;
+  changing "Add to …" re-matches against that subject (`ankiTarget`).
+- **Subject editor → Anki deck:** choose the collection; unlinked items are
+  matched automatically, each can be changed in a dropdown ("Whole subject
+  deck" = no own deck), "Match by name" again, "Add N sub-decks as new items".
+  Needs desktop Anki with AnkiConnect; on phones the links are shown only.
+- Without links, deck names default to `Subject::Lecture`
+  (`deckForChunk`, `deckForSubject`).
+
 ### Connecting to the Anki app
-Each Anki task has an **▶ Anki** button. It opens the **lecture's deck**
-(`Subject::Lecture`) when that session wrote cards for exactly one lecture,
-otherwise the **subject deck** (`Subject`, which includes all its lectures):
+Each Anki task has an **▶ Anki** button that opens **exactly the linked deck
+of the lecture/chapter** whose cards were written in that session. If a
+session wrote cards for several items, there's one ▶ button per item. Review-
+only Anki tasks open the **subject's deck**:
 
 | Device | What happens | How |
 |---|---|---|
@@ -130,11 +157,9 @@ otherwise the **subject deck** (`Subject`, which includes all its lectures):
 **Connecting (desktop, Settings → Anki app):** install AnkiConnect, keep Anki
 open, press Connect → Anki shows an "allow this website?" popup
 (`requestPermission`). After that:
-- **Create my decks in Anki** – creates missing `Subject` and
-  `Subject::Lecture` decks (they reach the phone via AnkiWeb sync).
-- **Import subjects from Anki** – `Subject::Lecture` decks become subjects and
-  lectures in the same review list as file imports; lectures that already
-  exist are left out.
+- **Set up subjects from Anki** – see "Linking" above.
+- **Create missing decks in Anki** – creates the linked / default decks that
+  don't exist yet (they reach the phone via AnkiWeb sync).
 - The connection is stored per device (`lib/device.ts`), never synced.
 
 AnkiWeb has no public API or "sign in with AnkiWeb", so an Anki account can't
@@ -262,10 +287,12 @@ Code: `apps/web/src/planner.ts`.
   this week to the last exam with exam markers, exam list with "main study
   done by", legend. Buffer = striped amber, extra = rose border, day off = grey.
 - **Subjects:** cards with progress, chunks, cards made / estimated; editor
-  with category icon per chunk, step toggles, real card count, reorder,
-  suggested Anki deck name.
-- **Settings:** study rhythm, pace, weekly buffer, evening check-in time,
-  days off, Anki, time estimates, data (export/import/start over).
+  with category icon per item, step toggles, real card count, reorder, the
+  linked (blue) or default Anki deck name, and an "Anki deck" section to link
+  the subject and its items.
+- **Settings:** "When do you study?" (full width: presets + week grid),
+  study rhythm, pace, weekly buffer, evening check-in time, days off, Anki,
+  splitting long material, time estimates, data (export/import/start over).
 - Design: light and dark mode, mobile bottom tab bar, desktop sidebar,
   rounded cards, subject colors, no clutter.
 

@@ -14,23 +14,28 @@ import { Plus, Trash2 } from "lucide-react";
 import { Fragment, useState } from "react";
 import { formatShort, newId, todayISO, WEEKDAYS } from "../lib/format";
 import { useStore } from "../store";
-import { Button, Field, NumberInput, Segmented, Select, TextInput, Toggle } from "./ui";
+import { Button, cx, Field, NumberInput, Segmented, Select, TextInput, Toggle } from "./ui";
 
 const COUNTS: SessionCount[] = [1, 2, 3, 4];
-const HALF_OPTIONS = [
-  { value: 0, label: "–", hint: "Free" },
-  { value: 1, label: "1", hint: "1 session" },
-  { value: 2, label: "2", hint: "2 sessions" },
-] as const;
 const WEEK_ORDER = [1, 2, 3, 4, 5, 6, 0]; // Monday first
 
-const PRESETS: { label: string; week: () => WeekPlan }[] = [
-  { label: "Weekday afternoons + weekend mornings", week: () => DEFAULT_WEEK.map((d) => ({ ...d })) as WeekPlan },
-  { label: "Weekday afternoons only", week: () => DEFAULT_WEEK.map((d, i) => (i === 0 || i === 6 ? { am: 0, pm: 0 } : { ...d })) as WeekPlan },
-  { label: "Every day, morning + afternoon", week: () => everyDay(1, 1) },
+const PRESETS: { label: string; detail: string; week: () => WeekPlan }[] = [
+  {
+    label: "Weekday afternoons + weekend mornings",
+    detail: "Mornings for lectures, half the weekend free",
+    week: () => DEFAULT_WEEK.map((d) => ({ ...d })) as WeekPlan,
+  },
+  {
+    label: "Weekday afternoons only",
+    detail: "Weekends stay completely free",
+    week: () => DEFAULT_WEEK.map((d, i) => (i === 0 || i === 6 ? { am: 0, pm: 0 } : { ...d })) as WeekPlan,
+  },
+  { label: "Every day, morning + afternoon", detail: "Exam season: full days", week: () => everyDay(1, 1) },
 ];
 
-/** Mon–Sun × morning/afternoon: how many sessions you normally study. */
+const sameWeek = (a: WeekPlan, b: WeekPlan) => a.every((d, i) => d.am === b[i]!.am && d.pm === b[i]!.pm);
+
+/** Mon–Sun as columns, morning/afternoon as rows; 0/1/2 sessions in each cell. */
 export function WeekGrid() {
   const s = useStore((x) => x.settings);
   const update = useStore((x) => x.updateSettings);
@@ -42,42 +47,103 @@ export function WeekGrid() {
   const perWeek = sessionsPerWeek(s);
 
   return (
-    <div>
-      <div className="grid grid-cols-[3.5rem_1fr_1fr] items-center gap-x-2 gap-y-1.5">
-        <span />
-        <span className="text-center text-xs font-medium text-slate-500">Morning</span>
-        <span className="text-center text-xs font-medium text-slate-500">Afternoon</span>
-        {WEEK_ORDER.map((d) => (
-          <Fragment key={d}>
-            <span className="text-sm font-medium">{WEEKDAYS[d]!.slice(0, 3)}</span>
-            <Segmented value={s.week[d]!.am} onChange={(v) => setDay(d, "am", v)} options={[...HALF_OPTIONS]} />
-            <Segmented value={s.week[d]!.pm} onChange={(v) => setDay(d, "pm", v)} options={[...HALF_OPTIONS]} />
-          </Fragment>
-        ))}
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+        {PRESETS.map((p) => {
+          const week = p.week();
+          const active = sameWeek(week, s.week);
+          const n = week.reduce((a, d) => a + d.am + d.pm, 0);
+          return (
+            <button
+              key={p.label}
+              type="button"
+              aria-pressed={active}
+              onClick={() => update({ week })}
+              className={cx(
+                "rounded-2xl border-2 px-3 py-2.5 text-left transition sm:py-3",
+                active
+                  ? "border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-500/10"
+                  : "border-slate-200 hover:border-indigo-300 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800/60",
+              )}
+            >
+              <span className="block text-sm font-semibold leading-snug sm:text-base">{p.label}</span>
+              <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
+                {p.detail} · {n} sessions
+              </span>
+            </button>
+          );
+        })}
       </div>
-      <p className="mt-3 text-sm text-slate-600 dark:text-slate-400">
-        {perWeek} session{perWeek === 1 ? "" : "s"} a week ≈ {Math.round((perWeek * s.sessionMinutes) / 60)} h. Free half-days stay free.
+
+      <p className="text-xs text-slate-500 sm:hidden">Swipe sideways to see the whole week →</p>
+      <div className="overflow-x-auto pb-1">
+        <div className="grid min-w-[34rem] grid-cols-[4.5rem_repeat(7,minmax(0,1fr))] items-center gap-1.5">
+          <span className="sticky left-0 z-10 self-stretch bg-white dark:bg-slate-900" />
+          {WEEK_ORDER.map((d) => (
+            <span key={d} className={cx("text-center text-sm font-semibold", (d === 0 || d === 6) && "text-indigo-600 dark:text-indigo-400")}>
+              {WEEKDAYS[d]!.slice(0, 3)}
+            </span>
+          ))}
+          {(["am", "pm"] as const).map((half) => (
+            <Fragment key={half}>
+              <span className="sticky left-0 z-10 flex self-stretch items-center bg-white pr-1 text-xs font-medium text-slate-500 dark:bg-slate-900">
+                {half === "am" ? "Morning" : "Afternoon"}
+              </span>
+              {WEEK_ORDER.map((d) => (
+                <CellPicker key={d} label={`${WEEKDAYS[d]} ${half === "am" ? "morning" : "afternoon"}`} value={s.week[d]![half]} onChange={(v) => setDay(d, half, v)} />
+              ))}
+            </Fragment>
+          ))}
+        </div>
+      </div>
+      <p className="text-sm text-slate-600 dark:text-slate-400">
+        {perWeek} session{perWeek === 1 ? "" : "s"} a week ≈ {Math.round((perWeek * s.sessionMinutes) / 60)} h. – = free, 1 or 2 = sessions in that
+        half-day. Free half-days stay free.
       </p>
-      <div className="mt-3 flex flex-wrap gap-2">
-        {PRESETS.map((p) => (
-          <Button key={p.label} variant="secondary" size="sm" onClick={() => update({ week: p.week() })}>
-            {p.label}
-          </Button>
-        ))}
-      </div>
     </div>
   );
 }
 
-export function RhythmSettings() {
+/** – / 1 / 2 side by side for one half-day. */
+function CellPicker({ label, value, onChange }: { label: string; value: HalfDaySessions; onChange: (v: HalfDaySessions) => void }) {
+  return (
+    <div role="radiogroup" aria-label={label} className="flex rounded-xl bg-slate-100 p-0.5 dark:bg-slate-800">
+      {([0, 1, 2] as const).map((v) => {
+        const on = value === v;
+        return (
+          <button
+            key={v}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            aria-label={`${label}: ${v === 0 ? "free" : `${v} session${v > 1 ? "s" : ""}`}`}
+            onClick={() => onChange(v)}
+            className={cx(
+              "h-9 flex-1 rounded-lg text-sm font-semibold tabular-nums transition",
+              on
+                ? v === 0
+                  ? "bg-white text-slate-700 shadow-sm dark:bg-slate-600 dark:text-white"
+                  : v === 1
+                    ? "bg-indigo-500 text-white shadow-sm"
+                    : "bg-indigo-700 text-white shadow-sm"
+                : "text-slate-400 hover:text-slate-700 dark:hover:text-slate-200",
+            )}
+          >
+            {v === 0 ? "–" : v}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function RhythmSettings({ week = true }: { week?: boolean }) {
   const s = useStore((x) => x.settings);
   const update = useStore((x) => x.updateSettings);
 
   return (
     <div className="space-y-5">
-      <Field label="When do you study?" hint="Up to 2 sessions per morning or afternoon." group>
-        <WeekGrid />
-      </Field>
+      {week && <WeekGrid />}
       <Field label="On a busy day, at most" hint="Extra sessions are only added on days you already study, and only after you agree." group>
         <Segmented
           value={s.maxSessionsPerDay}
@@ -96,17 +162,6 @@ export function RhythmSettings() {
           className="w-full accent-indigo-600"
         />
       </Field>
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-        <Field label="Max chunks per session">
-          <NumberInput min={1} max={6} value={s.maxChunksPerSession} onChange={(v) => update({ maxChunksPerSession: Math.max(1, Math.round(v)) })} />
-        </Field>
-        <Field label="Max pages per chunk" hint="Bigger chapters get split.">
-          <NumberInput min={5} max={200} value={s.maxPagesPerChunk} onChange={(v) => update({ maxPagesPerChunk: Math.max(5, Math.round(v)) })} />
-        </Field>
-        <Field label="Max slides per chunk">
-          <NumberInput min={10} max={400} value={s.maxSlidesPerChunk} onChange={(v) => update({ maxSlidesPerChunk: Math.max(10, Math.round(v)) })} />
-        </Field>
-      </div>
       <Field
         label="Pace"
         hint={
@@ -132,6 +187,30 @@ export function RhythmSettings() {
           options={[0, 1, 2, 3, 4].map((d) => ({ value: d, label: d === 0 ? "same day" : `${d} day${d > 1 ? "s" : ""}` }))}
         />
       </Field>
+    </div>
+  );
+}
+
+/** Settings only: how long material is cut into session-sized pieces. */
+export function SplittingSettings() {
+  const s = useStore((x) => x.settings);
+  const update = useStore((x) => x.updateSettings);
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-slate-600 dark:text-slate-400">
+        Each lecture, book chapter or slide deck is one <b>item</b> in your plan. Long items are cut into parts that fit one session – e.g. a
+        60-page chapter becomes “Chapter 4 (1/3)”, “(2/3)” and “(3/3)” on different days. These limits decide where that happens.
+      </p>
+      <Field label="Different items per session" hint="How many lectures or chapters one session may mix. 1 = always one thing at a time.">
+        <NumberInput className="w-28" min={1} max={6} value={s.maxChunksPerSession} onChange={(v) => update({ maxChunksPerSession: Math.max(1, Math.round(v)) })} />
+      </Field>
+      <Field label="Split chapters longer than … pages" hint={`A ${s.maxPagesPerChunk * 2}-page chapter becomes 2 parts.`}>
+        <NumberInput className="w-28" min={5} max={200} value={s.maxPagesPerChunk} onChange={(v) => update({ maxPagesPerChunk: Math.max(5, Math.round(v)) })} />
+      </Field>
+      <Field label="Split slide decks longer than … slides" hint={`A ${s.maxSlidesPerChunk * 2}-slide deck becomes 2 parts.`}>
+        <NumberInput className="w-28" min={10} max={400} value={s.maxSlidesPerChunk} onChange={(v) => update({ maxSlidesPerChunk: Math.max(10, Math.round(v)) })} />
+      </Field>
+      <p className="text-xs text-slate-500">Anything that doesn't fit into one session is split anyway, whatever these numbers say.</p>
     </div>
   );
 }
