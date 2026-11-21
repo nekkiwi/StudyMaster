@@ -51,7 +51,7 @@ export function AssistantBox({ planner, className }: { planner: Planner; classNa
     setAnswer(null);
     const data = useStore.getState();
     const plan = planner.shown.plan;
-    const context = buildContext(data, plan, planner.today);
+    const context = buildContext(data, plan, planner.today, { betterPlanWaiting: !!planner.proposal && !planner.declined });
     try {
       const res = await post<{ reply: string; actions: unknown[]; left: number }>("/api/assistant", {
         message,
@@ -76,13 +76,11 @@ export function AssistantBox({ planner, className }: { planner: Planner; classNa
     const before = snapshot(state);
     useStore.setState(applyChanges(state, answer.changes, answer.plan));
     setAnswer(null);
-    history.current = [...history.current, { role: "user" as const, text: "(Applied the changes.)" }].slice(-4);
     toast("Done – your plan is updated.", { tone: "success", action: { label: "Undo", run: () => useStore.setState(before) } });
   };
 
   const cancel = () => {
     setAnswer(null);
-    history.current = [...history.current, { role: "user" as const, text: "(Didn't apply the changes.)" }].slice(-4);
     input.current?.focus();
   };
 

@@ -110,7 +110,9 @@ Rules:
 - Questions (why is a day full, am I on track, what's next): answer from the plan data, no actions. Status per subject is given: deficit > 0 means it doesn't fit before the exam.
 - If the message is unclear, missing something essential, or not about studying with this app, ask a short question or say what you can help with – no actions.
 - Never invent material, exams or progress the student didn't mention.
-- reply: 1–3 short sentences in the student's language, friendly, no jargon. When proposing actions, say what will change in plain words (the student confirms below your reply).`;
+- Handle only the latest message. Earlier proposals may or may not have been applied – the plan data is always current; don't mention earlier proposals.
+- "betterPlanWaiting" means a plan that fits better (using the weekly catch-up slot or extra sessions) is waiting for the student's OK in a banner; mention it when they ask whether things fit.
+- reply: 1–3 short sentences in the language of the latest message, friendly, no jargon. When proposing actions, say what will change in plain words (the student confirms below your reply).`;
 
 /** Asks Claude; throws TocError for unusable answers. */
 export async function askAssistant(client: Anthropic, message: string, context: string, history: Turn[]): Promise<AssistantResult> {

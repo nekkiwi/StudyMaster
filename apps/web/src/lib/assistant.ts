@@ -64,7 +64,7 @@ export function checkInDates(data: Pick<AppData, "checkIns">, plan: Plan, today:
 }
 
 /** The compact plan summary the helper answers from. */
-export function buildContext(data: AppData, plan: Plan, today: ISODate): AssistantContext {
+export function buildContext(data: AppData, plan: Plan, today: ISODate, extra: { betterPlanWaiting?: boolean } = {}): AssistantContext {
   const ids = new Map<string, string>();
   const short = new Map<string, string>();
   data.subjects.forEach((s, i) => {
@@ -128,6 +128,7 @@ export function buildContext(data: AppData, plan: Plan, today: ISODate): Assista
         ),
       })),
     unscheduledHours: hours(plan.unscheduled.reduce((sum, i) => sum + i.minutes, 0)),
+    ...(extra.betterPlanWaiting ? { betterPlanWaiting: true } : {}),
   };
   return { text: JSON.stringify(summary), ids };
 }
