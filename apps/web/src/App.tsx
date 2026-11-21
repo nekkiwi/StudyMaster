@@ -3,6 +3,7 @@ import { BookMarked, CalendarDays, Home, Settings as SettingsIcon } from "lucide
 import { useEffect, useRef, useState } from "react";
 import { useAccount, wasSignedIn } from "./account";
 import { AccountChip, SignInDialog } from "./components/account";
+import { AnkiPromptDialog } from "./components/ankiConnect";
 import { toast, Toaster } from "./components/toast";
 import { cx } from "./components/ui";
 import { formatShort } from "./lib/format";
@@ -142,6 +143,7 @@ function Main() {
         </div>
       </nav>
       <Toaster />
+      <AnkiPromptDialog />
     </div>
   );
 }

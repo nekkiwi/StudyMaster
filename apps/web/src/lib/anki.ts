@@ -6,10 +6,12 @@
  * Anki shows an "allow this website?" popup. After that we can read decks,
  * create the Subject::Lecture structure and open review of an exact deck.
  *
- * Phones: a web page can only open the Anki app (see openAnkiOnPhone).
- *  - AnkiDroid only opens a specific deck for installed apps, not for links.
- *  - AnkiMobile 25.07+ is reported to support anki://x-callback-url/study?deck=…
- *    (not verified against the official docs – test on a device).
+ * Phones (see phoneAnkiLink):
+ *  - AnkiMobile 25.07+: anki://x-callback-url/study?deck=… starts studying that
+ *    deck (from the AnkiMobile 25.07 release notes).
+ *  - AnkiDroid 2.25+: anki://x-callback-url/browser?search=… opens its card
+ *    browser with a search – the only AnkiDroid screen a web page may open
+ *    (Chrome only starts BROWSABLE activities; "review deck" isn't one).
  */
 
 const ANKI_CONNECT_URL = "http://127.0.0.1:8765";
@@ -89,11 +91,28 @@ export async function dueCounts(names: string[]): Promise<Record<string, number>
   return out;
 }
 
-/** Link that opens Anki on a phone (the deck only where the app supports it). */
+/** Anki search for exactly this deck (and its sub-decks). `*`, `_`, `\` and `"` are escaped. */
+export function deckSearch(deck: string): string {
+  return `deck:"${deck.replace(/([*_\\"])/g, "\\$1")}"`;
+}
+
+/**
+ * Link that opens this deck in the phone's Anki app.
+ * iPhone: AnkiMobile studies the deck. Android: AnkiDroid shows the deck's
+ * cards; without AnkiDroid 2.25+ the Play Store opens to install/update it.
+ */
 export function phoneAnkiLink(platform: Exclude<Platform, "desktop">, deck: string): string {
   if (platform === "ios") return `anki://x-callback-url/study?deck=${encodeURIComponent(deck)}`;
-  // Opens AnkiDroid (or its Play Store page if it isn't installed).
-  return "intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.ichi2.anki;end";
+  const search = encodeURIComponent(deckSearch(deck));
+  return `intent://x-callback-url/browser?search=${search}#Intent;scheme=anki;package=com.ichi2.anki;end`;
+}
+
+/**
+ * Safari on a Mac blocks every request from a website to 127.0.0.1
+ * (WebKit bug 171934), so AnkiConnect can't be reached from it.
+ */
+export function isDesktopSafari(userAgent = typeof navigator !== "undefined" ? navigator.userAgent : ""): boolean {
+  return detectPlatform(userAgent) === "desktop" && /Safari\//.test(userAgent) && !/Chrome|Chromium|CriOS|Edg\/|OPR\/|Firefox|FxiOS/.test(userAgent);
 }
 
 export const ANKIWEB_DECKS_URL = "https://ankiweb.net/decks";

@@ -19,6 +19,13 @@
   connect desktop Anki, create decks, **link subjects to Anki collections and
   lectures to sub-decks** (set up from Anki, auto-match by name, fix by hand);
   ▶ Anki opens exactly the linked deck.
+- ✅ ▶ Anki on every device: connect-and-open dialog on computers, Safari
+  note, AnkiMobile study link, AnkiDroid deck link.
+- ⏳ Android: start *studying* the exact deck. Options: propose a
+  `anki://x-callback-url/study?deck=` deep link to AnkiDroid (like AnkiMobile),
+  or ship StudyMaster as an Android app that sends AnkiDroid's review intent
+  (needs deck IDs via AnkiConnect `deckNamesAndIds`; IDs are the same on all
+  synced devices).
 - ✅ Week grid with Mon–Sun columns and big presets; splitting limits only in
   Settings, explained.
 - ✅ **Accounts + sync** (Firebase): Google and email/password sign-in,

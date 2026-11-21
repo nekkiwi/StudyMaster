@@ -1,6 +1,7 @@
 import type { Subject } from "@studymaster/core";
 import { CheckCircle2, Download, ExternalLink, FolderPlus, Layers, Link2, Loader2, Plus, RefreshCw, Unplug, Wand2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { create } from "zustand";
 import {
   ANKIWEB_DECKS_URL,
   AnkiConnectError,
@@ -10,6 +11,7 @@ import {
   deckForChunk,
   deckForSubject,
   detectPlatform,
+  isDesktopSafari,
   leaf,
   matchDecks,
   openDeckOnDesktop,
@@ -23,29 +25,144 @@ import { draftFromAnki, lectureNumber, type Draft } from "../lib/importer";
 import { useStore } from "../store";
 import { ImportDialog } from "./importer";
 import { toast } from "./toast";
-import { Badge, Button, cx, Select } from "./ui";
+import { Badge, Button, cx, Modal, Select } from "./ui";
 
-/** Opens the given deck in Anki as directly as the device allows. */
+/** Which deck the "open in Anki" dialog is about (desktop only). */
+type PromptReason = "connect" | "closed" | "safari";
+const useAnkiPrompt = create<{ deck: string | null; reason: PromptReason; show(deck: string, reason: PromptReason): void; hide(): void }>(
+  (set) => ({
+    deck: null,
+    reason: "connect",
+    show: (deck, reason) => set({ deck, reason }),
+    hide: () => set({ deck: null }),
+  }),
+);
+
+/**
+ * Opens the given deck in Anki as directly as the device allows:
+ * computer → desktop Anki at that deck (asks to connect the first time),
+ * iPhone → AnkiMobile studies it, Android → AnkiDroid shows its cards.
+ */
 export function useOpenAnki() {
   const connected = useDevice((s) => s.ankiConnected);
+  const show = useAnkiPrompt((s) => s.show);
   return async (deck: string) => {
     const platform = detectPlatform();
     if (platform !== "desktop") {
       window.location.href = phoneAnkiLink(platform, deck);
       return;
     }
-    if (connected) {
-      try {
-        await openDeckOnDesktop(deck);
-        toast(`Opened "${deck}" in Anki.`, { tone: "success" });
-        return;
-      } catch (e) {
-        toast(e instanceof AnkiConnectError ? e.message : "Couldn't reach Anki.");
-      }
+    if (isDesktopSafari()) return show(deck, "safari");
+    if (!connected) return show(deck, "connect");
+    try {
+      await openDeckOnDesktop(deck);
+      toast(`Opened "${deck}" in Anki.`, { tone: "success" });
+    } catch {
+      show(deck, "closed");
     }
-    window.open(ANKIWEB_DECKS_URL, "_blank", "noopener");
-    if (!connected) toast("Tip: connect Anki on this computer in Settings to open decks directly.");
   };
+}
+
+/** Safari on a Mac can't talk to desktop Anki. */
+function SafariNote() {
+  return (
+    <p>
+      Safari doesn't let websites talk to apps on your Mac, so it can't open Anki. Open StudyMaster in <b>Chrome</b>, <b>Edge</b> or <b>Firefox</b>{" "}
+      for this (your plan is the same when you're signed in) – or use AnkiWeb in the meantime.
+    </p>
+  );
+}
+
+/** Desktop dialog: connect Anki (once) or open it, then opens the deck. Mounted once in App. */
+export function AnkiPromptDialog() {
+  const { deck, reason, hide } = useAnkiPrompt();
+  const setConnected = useDevice((s) => s.setAnkiConnected);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const close = () => {
+    setError(null);
+    hide();
+  };
+  const go = async () => {
+    if (!deck) return;
+    setBusy(true);
+    setError(null);
+    try {
+      if (reason === "connect") {
+        const ok = await requestAnkiPermission();
+        setConnected(ok);
+        if (!ok) {
+          setError("Anki said no. Press the button again and choose “Yes” in Anki.");
+          return;
+        }
+      }
+      await openDeckOnDesktop(deck);
+      toast(`Opened "${deck}" in Anki.`, { tone: "success" });
+      close();
+    } catch (e) {
+      setError(
+        e instanceof AnkiConnectError && !/reachable/.test(e.message)
+          ? `Anki says: ${e.message}`
+          : "Anki isn't reachable. Is Anki open, with the AnkiConnect add-on installed (and Anki restarted after installing it)? If your browser asked about access to apps on this device and you said no, allow it via the icon left of the web address (Site settings).",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal
+      open={!!deck}
+      onClose={close}
+      title="Open in Anki"
+      footer={
+        <>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              window.open(ANKIWEB_DECKS_URL, "_blank", "noopener");
+              close();
+            }}
+          >
+            <ExternalLink size={16} /> AnkiWeb instead
+          </Button>
+          {reason !== "safari" && (
+            <Button onClick={go} disabled={busy}>
+              {busy ? <Loader2 size={16} className="animate-spin" /> : reason === "connect" ? <Link2 size={16} /> : <RefreshCw size={16} />}
+              {reason === "connect" ? "Connect and open" : "Try again"}
+            </Button>
+          )}
+        </>
+      }
+    >
+      <div className="space-y-3 text-sm text-slate-600 dark:text-slate-300">
+        <p>
+          This opens <span className="font-mono text-xs text-slate-900 dark:text-white">{deck}</span> in Anki on this computer.
+        </p>
+        {reason === "connect" ? (
+          <>
+            <p>A website can only open a deck in Anki through the free AnkiConnect add-on. Set it up once on this computer:</p>
+            <ol className="list-decimal space-y-1.5 pl-5">
+              <li>
+                In Anki: <i>Tools → Add-ons → Get Add-ons…</i>, enter <span className="font-mono">2055492159</span>, then restart Anki.
+              </li>
+              <li>Keep Anki open and press <b>Connect and open</b>.</li>
+              <li>
+                Your browser may ask to let this site access <b>apps on this device</b> – choose <b>Allow</b>. Then Anki asks whether to allow
+                StudyMaster – choose <b>Yes</b>.
+              </li>
+            </ol>
+          </>
+        ) : reason === "safari" ? (
+          <SafariNote />
+        ) : (
+          <p>Anki didn't answer. Open Anki on this computer, then press Try again.</p>
+        )}
+        {error && <p className="rounded-xl bg-rose-50 p-3 text-rose-700 dark:bg-rose-500/10 dark:text-rose-300">{error}</p>}
+      </div>
+    </Modal>
+  );
 }
 
 /** Connect button logic: asks Anki for permission (Anki shows a popup). */
@@ -100,6 +217,13 @@ function ConnectHint({ what }: { what: string }) {
       <p className="text-sm text-slate-600 dark:text-slate-400">
         To {what}, open StudyMaster on your computer with Anki running. Links you make there work on your phone too.
       </p>
+    );
+  }
+  if (isDesktopSafari()) {
+    return (
+      <div className="text-sm text-slate-600 dark:text-slate-400">
+        <SafariNote />
+      </div>
     );
   }
   return (
@@ -367,13 +491,29 @@ export function AnkiConnectSection() {
     return (
       <div className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
         <p>
-          On your phone, tapping an <b>Anki</b> task opens the {platform === "android" ? "AnkiDroid" : "AnkiMobile"} app
-          {platform === "ios" ? " at that deck (AnkiMobile 25.07 or newer)" : ""}.
+          {platform === "ios" ? (
+            <>
+              On your iPhone, ▶ Anki opens AnkiMobile and starts studying exactly that deck (AnkiMobile 25.07 or newer).
+            </>
+          ) : (
+            <>
+              On Android, ▶ Anki opens AnkiDroid showing exactly that deck's cards (AnkiDroid 2.25 or newer – otherwise the Play Store opens to update
+              it). AnkiDroid doesn't let websites start a study session directly yet.
+            </>
+          )}
         </p>
         <p>
           To link subjects to your Anki decks or create decks, open StudyMaster on your computer with Anki running. The decks then reach your phone
           through AnkiWeb sync as usual.
         </p>
+      </div>
+    );
+  }
+
+  if (isDesktopSafari()) {
+    return (
+      <div className="text-sm text-slate-600 dark:text-slate-400">
+        <SafariNote />
       </div>
     );
   }
@@ -391,7 +531,10 @@ export function AnkiConnectSection() {
           <li>
             In Anki: <i>Tools → Add-ons → Get Add-ons…</i> and enter <span className="font-mono">2055492159</span> (AnkiConnect). Restart Anki.
           </li>
-          <li>Keep Anki open and press Connect. Anki asks once whether to allow StudyMaster.</li>
+          <li>
+            Keep Anki open and press Connect. Your browser may ask to allow access to apps on this device (choose Allow), then Anki asks once
+            whether to allow StudyMaster.
+          </li>
         </ol>
       )}
       <div className="flex flex-wrap gap-2">

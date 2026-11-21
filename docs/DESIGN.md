@@ -149,10 +149,12 @@ only Anki tasks open the **subject's deck**:
 
 | Device | What happens | How |
 |---|---|---|
-| Desktop with Anki + **AnkiConnect** add-on (2055492159) | Anki opens review of exactly that deck | `guiDeckReview` via AnkiConnect on 127.0.0.1:8765 |
-| Desktop without AnkiConnect | AnkiWeb opens in a new tab + tip to connect | link |
-| iPhone (AnkiMobile) | AnkiMobile opens at that deck | `anki://x-callback-url/study?deck=…` – reported for AnkiMobile 25.07+, **not verified against the official docs; test on a device** |
-| Android (AnkiDroid) | AnkiDroid opens (not the exact deck) | `intent://…;package=com.ichi2.anki` – AnkiDroid only opens a specific deck for *installed apps* (explicit intent with a long `EXTRA_DECK_ID` to `com.ichi2.anki.IntentHandler`), which a web page can't send. A native wrapper (e.g. Capacitor) could, later. |
+| Windows / Mac / Linux – Chrome, Edge, Firefox – with Anki + **AnkiConnect** (2055492159) | Desktop Anki opens review of exactly that deck | `guiDeckReview` via AnkiConnect on 127.0.0.1:8765. Chrome/Edge 142+ ask once to allow "apps on this device" (Local Network Access). |
+| Same, not connected yet | The first ▶ press opens a dialog: install the add-on, keep Anki open, **Connect and open** → browser prompt → Anki's popup → the deck opens | `requestPermission`, then `guiDeckReview` |
+| Same, Anki closed | Dialog "Open Anki, then Try again" (+ AnkiWeb) | |
+| **Mac Safari** | Explains that Safari can't talk to apps on the Mac: use Chrome/Edge/Firefox (or AnkiWeb) | WebKit blocks every request to 127.0.0.1 from https pages (WebKit bug 171934) |
+| iPhone / iPad (AnkiMobile 25.07+) | AnkiMobile starts studying exactly that deck | `anki://x-callback-url/study?deck=<full deck name>` (AnkiMobile 25.07 release notes) |
+| Android (AnkiDroid 2.25+) | AnkiDroid opens on **exactly that deck's cards** (card browser) – not the study screen | `intent://x-callback-url/browser?search=deck:"…"#Intent;scheme=anki;package=com.ichi2.anki;end`; older/missing AnkiDroid → Play Store. Chrome only opens BROWSABLE activities, and AnkiDroid's "review deck" intent (`EXTRA_DECK_ID`) isn't one. Exact study needs a `study` deep link in AnkiDroid (like AnkiMobile's) or our own Android app. |
 
 **Connecting (desktop, Settings → Anki app):** install AnkiConnect, keep Anki
 open, press Connect → Anki shows an "allow this website?" popup
