@@ -63,6 +63,7 @@ export function validateState(state: StudyState): string[] {
   for (const [slot, t] of Object.entries(s.slotTimes)) {
     if (!(t.start >= 0 && t.end <= 24 * 60 && t.start < t.end)) errors.push(`Session time for ${slot} is invalid.`);
   }
+  if (!["never", "needed", "free"].includes(s.mixSubjects)) errors.push("Subjects per session must be never, needed or free.");
   if (!Array.isArray(s.workflow) || s.workflow.length === 0) errors.push("Pick at least one way to study.");
   else if (s.workflow.some((a) => !ACTIVITIES.includes(a))) errors.push("The study style contains an unknown step.");
   for (const [subjectId, days] of Object.entries(state.ankiDue ?? {})) {

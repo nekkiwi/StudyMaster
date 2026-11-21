@@ -173,6 +173,11 @@ export interface Settings {
    * comes before every chunk step, else last.
    */
   workflow: Activity[];
+  /**
+   * Subjects in one session: "never" = one subject only, "needed" = a second
+   * one only when it would miss its exam otherwise, "free" = mix as it fits.
+   */
+  mixSubjects: "never" | "needed" | "free";
   /** Clock times of the sessions (to plan around classes from calendars). */
   slotTimes: SlotTimes;
   rates: Rates;

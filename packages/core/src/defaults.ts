@@ -37,6 +37,8 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultRecordingMinutes: 60,
   // Read the material → make Anki cards → study Anki.
   workflow: ["read", "cards", "anki"],
+  // One subject per session; a second only if it would miss its exam otherwise.
+  mixSubjects: "needed",
   // 8:00–10:30, 10:30–13:00, 14:00–16:30, 16:30–19:00.
   slotTimes: {
     am1: { start: 8 * 60, end: 10 * 60 + 30 },

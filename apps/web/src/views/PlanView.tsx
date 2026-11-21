@@ -221,112 +221,131 @@ function DayColumn({
   );
 }
 
-/** A heat strip from today to the last exam: how busy each day is. */
+/**
+ * Overview: one timeline row per subject, all on the same scale from this
+ * week to the last exam. Study days are bars in the subject's color (taller
+ * = more time), reviews dark, a dashed line marks "main study done by", the
+ * cap marks the exam. Tap a row to show that week above.
+ */
 function Overview({ planner, onPickWeek, weekStart }: { planner: Planner; onPickWeek: (d: ISODate) => void; weekStart: ISODate }) {
   const { today, shown, state } = planner;
-  const last = state.subjects.map((s) => s.examDate).sort().pop();
-  if (!last || last < today) return null;
-
-  const days = eachDay(fromDayNumber(weekKey(today)), last);
-  const weeks = [...new Set(days.map((d) => fromDayNumber(weekKey(d))))];
-  const max = state.settings.sessionMinutes * state.settings.maxSessionsPerDay;
-  const load = new Map<ISODate, number>();
-  for (const s of shown.plan.sessions) load.set(s.date, (load.get(s.date) ?? 0) + sessionMinutes(s));
-  const exams = new Map(state.subjects.map((s) => [s.examDate, s]));
-
   const upcoming = state.subjects.filter((s) => s.examDate >= today).sort((a, b) => a.examDate.localeCompare(b.examDate));
-  const subjects = new Map(state.subjects.map((s) => [s.id, s]));
+  const last = upcoming[upcoming.length - 1]?.examDate;
+  if (!last) return null;
+
+  const start = fromDayNumber(weekKey(today));
+  const total = daysBetween(start, last) + 1;
+  const x = (d: ISODate) => (daysBetween(start, d) / total) * 100;
+  const width = Math.max(100 / total, 0.35);
   const status = new Map(shown.plan.subjects.map((s) => [s.subjectId, s]));
+
+  // Minutes per subject and day (study work), and review days.
+  const work = new Map<string, Map<ISODate, number>>();
+  const reviews = new Map<string, Set<ISODate>>();
+  for (const session of shown.plan.sessions) {
+    if (session.type === "review" && session.reviewSubjectId) {
+      let set = reviews.get(session.reviewSubjectId);
+      if (!set) reviews.set(session.reviewSubjectId, (set = new Set()));
+      set.add(session.date);
+    }
+    for (const item of session.items) {
+      if (item.kind === "anki") continue;
+      let m = work.get(item.subjectId);
+      if (!m) work.set(item.subjectId, (m = new Map()));
+      m.set(session.date, (m.get(session.date) ?? 0) + item.minutes);
+    }
+  }
+  const dayMax = Math.max(60, ...[...work.values()].flatMap((m) => [...m.values()]));
+
+  // Month labels on the axis.
+  const months: { label: string; at: number }[] = [];
+  for (const d of eachDay(start, last)) {
+    if (d === start || d.endsWith("-01")) {
+      months.push({ label: new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { month: "short" }), at: x(d) });
+    }
+  }
+  const pick = (e: React.MouseEvent<HTMLElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const day = Math.min(total - 1, Math.max(0, Math.floor(((e.clientX - r.left) / r.width) * total)));
+    onPickWeek(addDays(start, day));
+  };
+  const weekLeft = x(weekStart);
+  const showWeek = weekStart >= start && weekStart <= last;
 
   return (
     <Card>
-      <SectionTitle action={<span className="text-xs text-slate-400">{daysBetween(today, last)} days to the last exam</span>}>
-        Overview
-      </SectionTitle>
-      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
-        {weeks.length <= 6 ? (
-        <div className="grid w-full max-w-sm grid-cols-7 gap-1.5 self-center lg:self-start">
-          {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
-            <span key={i} className="text-center text-[10px] text-slate-400">{d}</span>
-          ))}
-          {days.map((d) => {
-            const minutes = load.get(d) ?? 0;
-            const exam = exams.get(d);
-            const blocked = state.blocked.some((b) => b.start <= d && b.end >= d);
-            const inWeek = d >= weekStart && d <= addDays(weekStart, 6);
-            const level = minutes === 0 ? 0 : Math.min(4, Math.ceil((minutes / max) * 4));
-            // Subject colors of the day; busier days a little stronger.
-            const colors = daySubjects(shown.plan, d).filter((id) => subjects.has(id)).map((id) => subjectColor(subjects.get(id)));
-            const background = !exam && !blocked && minutes > 0 ? dayBackground(colors, 30 + level * 12) : undefined;
-            return (
-              <button
-                key={d}
-                type="button"
-                onClick={() => onPickWeek(d)}
-                title={`${formatDay(d)}${minutes ? ` · ${formatMinutes(minutes)}` : ""}${colors.length ? ` · ${daySubjects(shown.plan, d).map((id) => subjects.get(id)?.name).join(" + ")}` : ""}${exam ? ` · ${exam.name} exam` : ""}`}
-                className={cx(
-                  "relative aspect-square rounded-md transition hover:scale-110",
-                  d < today && "opacity-40",
-                  inWeek && "outline-2 outline-offset-1 outline-indigo-500",
-                  blocked ? "bg-slate-200 dark:bg-slate-700" : "bg-slate-100 dark:bg-slate-800",
-                )}
-                style={exam ? { background: exam.color } : background ? { backgroundImage: background } : undefined}
-              >
-                {exam && (
-                  <span className="absolute inset-0 flex items-center justify-center text-white">
-                    <GraduationCap size={14} />
-                  </span>
-                )}
-                {d === today && <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full border-2 border-white bg-rose-500 dark:border-slate-900" />}
-              </button>
-            );
-          })}
+      <SectionTitle action={<span className="text-xs text-slate-400">{daysBetween(today, last)} days to the last exam</span>}>Overview</SectionTitle>
+      <div className="space-y-1">
+        {/* Axis: months + today */}
+        <div className="flex items-end gap-3">
+          <span className="hidden w-36 shrink-0 sm:block" />
+          <div className="relative h-5 min-w-0 flex-1 text-[10px] font-medium text-slate-400">
+            {months.map((m) => (
+              <span key={`${m.label}${m.at}`} className="absolute bottom-0 border-l border-slate-200 pl-1 dark:border-slate-700" style={{ left: `${m.at}%` }}>
+                {m.label}
+              </span>
+            ))}
+          </div>
+          <span className="hidden w-32 shrink-0 sm:block" />
         </div>
-        ) : (
-          <CompactCalendar
-            weeks={weeks}
-            today={today}
-            weekStart={weekStart}
-            onPickWeek={onPickWeek}
-            cell={(d) => {
-              const minutes = load.get(d) ?? 0;
-              const exam = exams.get(d);
-              const blocked = state.blocked.some((b) => b.start <= d && b.end >= d);
-              const level = minutes === 0 ? 0 : Math.min(4, Math.ceil((minutes / max) * 4));
-              const colors = daySubjects(shown.plan, d).filter((id) => subjects.has(id)).map((id) => subjectColor(subjects.get(id)));
-              return {
-                exam: !!exam,
-                title: `${formatDay(d)}${minutes ? ` · ${formatMinutes(minutes)}` : ""}${exam ? ` · ${exam.name} exam` : ""}`,
-                style: exam
-                  ? { background: subjectColor(exam) }
-                  : !blocked && minutes > 0
-                    ? { backgroundImage: dayBackground(colors, 35 + level * 12) }
-                    : undefined,
-                className: blocked ? "bg-slate-300 dark:bg-slate-600" : "bg-slate-100 dark:bg-slate-800",
-              };
-            }}
-          />
-        )}
-        <ul className="flex-1 space-y-3">
-          {upcoming.map((s) => {
-            const st = status.get(s.id);
-            return (
-              <li key={s.id} className="flex items-center gap-3">
-                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-white" style={{ background: s.color }}>
-                  <GraduationCap size={16} />
+
+        {upcoming.map((subject) => {
+          const color = subjectColor(subject);
+          const days = work.get(subject.id) ?? new Map<ISODate, number>();
+          const st = status.get(subject.id);
+          const finishBy = st?.finishBy;
+          return (
+            <div key={subject.id} className="flex flex-col gap-1 py-1.5 sm:flex-row sm:items-center sm:gap-3">
+              <div className="flex items-center justify-between gap-2 sm:w-36 sm:shrink-0">
+                <span className="flex min-w-0 items-center gap-2 truncate text-sm font-medium">
+                  <SubjectDot color={color} /> {subject.name}
                 </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{s.name}</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Exam {formatDay(s.examDate)}
-                    {st?.lastStudyDate && ` · main study done ${formatShort(st.lastStudyDate)}`}
-                  </p>
-                </div>
+                <span className="sm:hidden">{st && st.deficitMinutes > 0 ? <Badge tone="rose">{formatMinutes(st.deficitMinutes)} short</Badge> : <Badge tone="emerald">on track</Badge>}</span>
+              </div>
+              <button
+                type="button"
+                onClick={pick}
+                aria-label={`${subject.name}: show a week`}
+                title={`${subject.name} · exam ${formatDay(subject.examDate)}${finishBy ? ` · main study done by ${formatShort(finishBy)}` : ""}`}
+                className="relative h-9 w-full shrink-0 rounded-lg bg-slate-50 sm:w-auto sm:min-w-0 sm:flex-1 sm:shrink dark:bg-slate-800/40"
+              >
+                {/* until the exam */}
+                <span className="absolute inset-y-0 left-0 rounded-lg" style={{ width: `${x(subject.examDate) + width}%`, background: `${color}14` }} />
+                {showWeek && <span className="absolute inset-y-0 bg-indigo-500/10 ring-1 ring-indigo-400/40" style={{ left: `${weekLeft}%`, width: `${(7 / total) * 100}%` }} />}
+                {[...days].map(([d, minutes]) => (
+                  <span
+                    key={d}
+                    className="absolute bottom-1 rounded-sm"
+                    style={{ left: `${x(d)}%`, width: `${width}%`, height: `${20 + (minutes / dayMax) * 65}%`, background: color, opacity: d < today ? 0.35 : 0.85 }}
+                  />
+                ))}
+                {[...(reviews.get(subject.id) ?? [])].map((d) => (
+                  <span key={`r${d}`} className="absolute bottom-1 h-[70%] rounded-sm bg-slate-700 dark:bg-slate-300" style={{ left: `${x(d)}%`, width: `${width}%` }} />
+                ))}
+                {finishBy && finishBy >= start && (
+                  <span className="absolute inset-y-1 border-l-2 border-dashed" style={{ left: `${x(finishBy)}%`, borderColor: color }} />
+                )}
+                <span
+                  className="absolute top-1/2 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full text-white shadow-sm"
+                  style={{ left: `${x(subject.examDate) + width / 2}%`, background: color }}
+                >
+                  <GraduationCap size={13} />
+                </span>
+                <span className="absolute inset-y-0 w-0.5 bg-rose-500" style={{ left: `${x(today)}%` }} />
+              </button>
+              <span className="hidden w-32 shrink-0 text-right whitespace-nowrap sm:block">
                 {st && st.deficitMinutes > 0 ? <Badge tone="rose">{formatMinutes(st.deficitMinutes)} short</Badge> : <Badge tone="emerald">on track</Badge>}
-              </li>
-            );
-          })}
-        </ul>
+              </span>
+            </div>
+          );
+        })}
+        <p className="flex flex-wrap items-center gap-x-4 gap-y-1 pt-2 text-xs text-slate-400 sm:pl-[9.75rem]">
+          <span className="flex items-center gap-1.5"><span className="h-3 w-1.5 rounded-sm bg-slate-400" /> study day (taller = more)</span>
+          <span className="flex items-center gap-1.5"><span className="h-3 w-1.5 rounded-sm bg-slate-700 dark:bg-slate-300" /> exam review</span>
+          <span className="flex items-center gap-1.5"><span className="h-3 border-l-2 border-dashed border-slate-400" /> main study done</span>
+          <span className="flex items-center gap-1.5"><span className="h-3 w-0.5 bg-rose-500" /> today</span>
+          <span>Tap a row to show that week.</span>
+        </p>
       </div>
     </Card>
   );
@@ -351,63 +370,6 @@ function Legend({ subjects }: { subjects: Subject[] }) {
       <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded ring-1 ring-rose-300" /> Extra session</span>
       <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-slate-200 dark:bg-slate-700" /> Day off</span>
       <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-indigo-600" /> Exam</span>
-    </div>
-  );
-}
-
-/**
- * Many weeks: one narrow column per week (Mon–Sun top to bottom), month
- * labels on top – like a year calendar. Scrolls sideways when needed.
- */
-function CompactCalendar({
-  weeks,
-  today,
-  weekStart,
-  onPickWeek,
-  cell,
-}: {
-  weeks: ISODate[];
-  today: ISODate;
-  weekStart: ISODate;
-  onPickWeek: (d: ISODate) => void;
-  cell: (d: ISODate) => { title: string; style?: React.CSSProperties; className: string; exam: boolean };
-}) {
-  const monthOf = (d: ISODate) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { month: "short" });
-  return (
-    <div className="w-full min-w-0 lg:max-w-xl">
-      <div className="overflow-x-auto pb-2">
-        <div className="flex gap-1">
-          <div className="flex shrink-0 flex-col gap-1 pr-1 pt-5 text-[9px] leading-[14px] text-slate-400">
-            {["M", "", "W", "", "F", "", "S"].map((l, i) => (
-              <span key={i} className="h-3.5">{l}</span>
-            ))}
-          </div>
-          {weeks.map((w, i) => {
-            const newMonth = i === 0 || monthOf(w) !== monthOf(weeks[i - 1]!);
-            const inWeek = w === weekStart;
-            return (
-              <button
-                key={w}
-                type="button"
-                onClick={() => onPickWeek(w)}
-                aria-label={`Week of ${formatShort(w)}`}
-                className={cx("flex shrink-0 flex-col gap-1 rounded-md p-0.5 transition hover:bg-slate-100 dark:hover:bg-slate-800", inWeek && "ring-2 ring-indigo-500")}
-              >
-                <span className="h-4 text-left text-[10px] font-medium whitespace-nowrap text-slate-500">{newMonth ? monthOf(w) : ""}</span>
-                {eachDay(w, addDays(w, 6)).map((d) => {
-                  const c = cell(d);
-                  return (
-                    <span key={d} title={c.title} style={c.style} className={cx("relative block h-3.5 w-3.5 rounded-[3px]", c.className, d < today && "opacity-40")}>
-                      {d === today && <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-rose-500" />}
-                    </span>
-                  );
-                })}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-      <p className="text-xs text-slate-400">Tap a week to show it above.</p>
     </div>
   );
 }

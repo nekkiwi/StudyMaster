@@ -120,6 +120,14 @@ The real workflow: A) watch → read → write cards, then B) study Anki.
   (≥ 15 min), so reviews never pause. Only once cards exist. Free days in the
   weekly plan stay free.
 
+### Subjects per session
+`settings.mixSubjects` (Settings → Study rhythm): **"Second if needed"**
+(default) – a session sticks to one subject and fills itself with it; a
+second subject joins only when it would miss its exam otherwise, or when at
+least an hour would stay empty (max two). "Only one" never mixes (sessions
+may end early); "Mix freely" is the old behaviour. With steady pacing,
+subjects alternate between sessions instead of mixing inside one.
+
 ### Study style
 Each user picks the steps for a lecture/chapter and their order
 (`settings.workflow`): watch the lecture, read, write a summary, make Anki
@@ -382,10 +390,13 @@ Code: `apps/web/src/planner.ts`.
 - **Today:** greeting, today's sessions as cards, check-in card (prominent in
   the evening), pending check-ins from previous days, tomorrow preview, exam
   list with progress ring + days left + "on track / at risk", last 7 days.
-- **Plan:** the **week timetable is the main view** (desktop 7 columns, phone
-  list), the overview comes below: up to 6 weeks as a calendar grid, longer
-  plans as a compact year-style strip (one narrow column per week, month
-  labels, scrolls sideways; tap a week to show it above), with exam markers, exam list with "main study
+- **Plan:** the **week timetable is the main view** (7 columns on wide
+  screens, a list below), the **overview is a timeline per subject** below:
+  all subjects on one scale from this week to the last exam, study days as
+  bars in the subject color (taller = more), exam reviews dark, a dashed line
+  for "main study done", a cap at the exam, a today line, month labels, the
+  shown week highlighted; tap a row to jump to that week; status on the
+  right. Same height for 3 weeks or 7 months. exam list with "main study
   done by", legend. **Days take the colors of the subjects studied:** one
   subject = light tint of its color, two = split diagonally, more = diagonal
   stripes (overview: stronger on busier days). Buffer = striped amber, extra

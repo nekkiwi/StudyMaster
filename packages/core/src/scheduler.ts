@@ -49,6 +49,8 @@ const MAX_REVIEW_SESSIONS = 6;
 const MIN_FRAGMENT_MINUTES = 30;
 /** A piece may run over by this much instead of leaving a tiny leftover. */
 const TAIL_TOLERANCE = 10;
+/** "Second subject if needed": also when this much of a session would stay empty. */
+const SECOND_SUBJECT_MINUTES = 60;
 /** Anki-only sessions on days without study are at least this long. */
 const ANKI_ONLY_MIN_MINUTES = 15;
 /** Exams this close count as "coming up" when choosing Anki decks. */
@@ -236,6 +238,8 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
     while (items.length < s.maxChunksPerSession) {
       let best: Subject | undefined;
       let bestSlack = Infinity;
+      // Subjects that may take this slot (deadline, fit and pacing passed).
+      const eligible = new Set<string>();
       for (const subject of subjects) {
         const queue = queues.get(subject.id)!;
         const next = queue[0];
@@ -273,6 +277,7 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
           slack = normalAhead + (slot.kind === "extra" ? bufferAhead : 0) - left;
           if (slack >= 0) continue; // would make it without this slot
         }
+        eligible.add(subject.id);
         if (
           slack < bestSlack - 1e-9 ||
           (Math.abs(slack - bestSlack) <= 1e-9 &&
@@ -282,6 +287,31 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
           best = subject;
           bestSlack = slack;
         }
+      }
+      // One subject per session: keep going with the session's subject. A
+      // second subject only joins when mixing is free, or when it's needed
+      // (that subject would miss its exam otherwise, slack < 0).
+      const first = items[0]?.subjectId;
+      if (first && s.mixSubjects !== "free") {
+        // The session's subject fills the session (deadline and fit permitting).
+        // Steady pacing then alternates subjects between sessions rather than
+        // mixing them inside one.
+        const next = queues.get(first)![0];
+        const viable =
+          eligible.has(first) ||
+          (!!next && key < deadlineKey.get(first)! && !(itemCost(next) > capLeft + TAIL_TOLERANCE && capLeft < MIN_FRAGMENT_MINUTES));
+        const subjectsSoFar = new Set(items.map((x) => x.subjectId)).size;
+        // "If needed": a second subject joins when it would miss its exam
+        // otherwise, or when at least an hour of the session would stay empty
+        // (at most two subjects then).
+        const needed =
+          s.mixSubjects === "needed" &&
+          !!best &&
+          best.id !== first &&
+          (bestSlack < 0 || (!viable && subjectsSoFar < 2 && capLeft >= SECOND_SUBJECT_MINUTES));
+        if (viable && !needed) best = subjects.find((x) => x.id === first)!;
+        else if (!needed) break;
+        // A joining subject continues from here (it's now the one in charge).
       }
       if (!best) break;
 

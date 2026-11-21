@@ -414,8 +414,12 @@ describe("pacing", () => {
     expect(plan.feasible).toBe(true);
     const bio = plan.subjects.find((s) => s.subjectId === "bio")!;
     expect(bio.lastStudyDate! >= "2026-12-14").toBe(true);
+    // Full one-subject sessions spread over the weeks (vs. 6 study days with
+    // "early"), and Anki keeps going on most days.
     const studyDays = new Set(plan.sessions.filter((s) => s.type === "study").map((s) => s.date));
-    expect(studyDays.size).toBeGreaterThanOrEqual(15); // vs. 6 days with "early"
+    expect(studyDays.size).toBeGreaterThanOrEqual(9);
+    const anyDays = new Set(plan.sessions.map((s) => s.date));
+    expect(anyDays.size).toBeGreaterThanOrEqual(15);
   });
 
   it("even fits as much work as early when time is tight", () => {
@@ -554,5 +558,23 @@ describe("calendar: busy times", () => {
     // The plan still fits the work, just not in the taken session.
     const plan = planOnce({ ...st, busy }, MON, normal);
     expect(plan.sessions.some((x) => x.date === MON && x.slot === "am1")).toBe(false);
+  });
+});
+
+describe("subjects per session", () => {
+  const mixed = (mixSubjects: "never" | "needed" | "free") => {
+    const st = state(
+      [subject("a", "2026-12-18"), subject("b", "2026-12-19"), subject("c", "2026-12-21")],
+      [...chunks("a", 8), ...chunks("b", 8), ...chunks("c", 8)],
+      { mixSubjects },
+    );
+    const sessions = planOnce(st, MON, normal).sessions.filter((x) => x.type === "study");
+    return sessions.filter((x) => new Set(x.items.filter((i) => i.kind !== "anki").map((i) => i.subjectId)).size > 1).length;
+  };
+
+  it("keeps one subject per session unless mixing is needed or allowed", () => {
+    expect(mixed("never")).toBe(0);
+    expect(mixed("needed")).toBeLessThan(mixed("free"));
+    expect(mixed("needed")).toBeLessThanOrEqual(2);
   });
 });

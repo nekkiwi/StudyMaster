@@ -251,6 +251,27 @@ export function RhythmSettings({ week = true }: { week?: boolean }) {
           options={COUNTS.map((c) => ({ value: c, label: `${c} session${c > 1 ? "s" : ""}` }))}
         />
       </Field>
+      <Field
+        label="Subjects in one session"
+        hint={
+          s.mixSubjects === "never"
+            ? "Every session sticks to one subject – it can end early."
+            : s.mixSubjects === "needed"
+              ? "One subject per session; a second one joins only when it would miss its exam otherwise."
+              : "Sessions mix subjects whenever that fills them best."
+        }
+        group
+      >
+        <Segmented
+          value={s.mixSubjects}
+          onChange={(mixSubjects) => update({ mixSubjects })}
+          options={[
+            { value: "never", label: "Only one" },
+            { value: "needed", label: "Second if needed" },
+            { value: "free", label: "Mix freely" },
+          ]}
+        />
+      </Field>
       <Field label={`Session length: ${Math.floor(s.sessionMinutes / 60)} h ${s.sessionMinutes % 60 ? `${s.sessionMinutes % 60} min` : ""}`}>
         <input
           type="range"
