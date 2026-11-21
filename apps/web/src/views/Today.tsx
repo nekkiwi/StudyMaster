@@ -1,6 +1,7 @@
 import { addDays, daysBetween, isBlocked, sessionMinutes, type Subject } from "@studymaster/core";
 import { CalendarCheck2, Coffee, Flame, Palmtree, PartyPopper, Sparkles } from "lucide-react";
 import { useMemo } from "react";
+import { AssistantBox } from "../components/assistant";
 import { CheckInCard } from "../components/checkin";
 import { ProposalBanner } from "../components/proposal";
 import { ReminderPrompt } from "../components/reminders";
@@ -57,6 +58,8 @@ export function TodayView({ planner }: { planner: Planner }) {
           </p>
         )}
       </header>
+
+      <AssistantBox planner={planner} />
 
       {/* On wide screens the plan warning stays on top; on phones it comes after today. */}
       <div className="hidden lg:block">

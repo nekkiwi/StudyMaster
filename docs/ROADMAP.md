@@ -31,7 +31,8 @@
 - ✅ Google Calendar sign-in: pick calendars directly (needs Calendar API +
   scope + test users in Google Cloud, see HOSTING.md).
 - ✅ Phone-first Today + evening check-in reminder (Web Push).
-- ⏳ "Tell StudyMaster…" box (plan changes in plain words, with preview).
+- ✅ "Tell StudyMaster…" box: plan changes and check-ins in plain words,
+  questions answered, every change previewed and applied only on "Apply".
 - ⏳ Microsoft/Outlook sign-in; Google app verification for all users.
 - ⏳ Android: start *studying* the exact deck. Options: propose a
   `anki://x-callback-url/study?deck=` deep link to AnkiDroid (like AnkiMobile),
@@ -65,9 +66,10 @@
 - QR "Continue on your phone".
 
 ### 3. Built-in assistant
-- `/api/assistant` on the Worker, server-side LLM key, shared tools (see
-  [AI.md](AI.md)), per-user daily limit, monthly spend cap, proposals for
-  anything that needs approval.
+- ✅ `/api/assistant` on the Worker ("Tell StudyMaster…" box), server-side key,
+  30 messages/user/day, preview before anything changes (see [AI.md](AI.md)).
+- Next: share its actions with the MCP server; more actions when asked for
+  (rename/remove items, session times).
 
 ### 4. MCP server + "Connect to Claude" page
 - `/mcp` with OAuth, same tools.

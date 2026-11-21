@@ -83,6 +83,10 @@ apps/web/        React 19 + Vite 6 + Tailwind 4 PWA (zustand for state)
   src/components/calendars.tsx  Calendars & timetable: add (Google/link/.ics/AI),
                       list, session times, auto refresh
   src/components/reminders.tsx  Evening reminder: switch, Today prompt, sync
+  src/components/assistant.tsx  "Tell StudyMaster…" box (Today + Plan): chips,
+                      reply, preview of changes, Apply/Undo
+  src/lib/assistant.ts  plan summary for the helper (short ids), checking,
+                      describing and applying its actions (pure)
   public/push-sw.js   Service worker part that shows the reminder notification
 apps/api/        Cloudflare Worker code (same Worker as the site, only /api/*)
   src/index.ts        Router – only the default handler + Durable Object classes
@@ -93,7 +97,10 @@ apps/api/        Cloudflare Worker code (same Worker as the site, only /api/*)
   src/calendar.ts     POST /api/ics (fetch calendar links, no CORS in browsers),
                       POST /api/timetable (PDF/photo → weekly classes, Claude)
   src/push.ts         Durable Object "Reminders": per-user alarm at check-in time
-                      → Web Push (no payload); one instance keeps the VAPID keys
+                      → Web Push (no payload); one instance keeps the VAPID keys;
+                      also counts assistant messages per user and day
+  src/assistant.ts    POST /api/assistant: message + plan summary → reply +
+                      typed actions (Claude Haiku 5.5, structured output)
   src/reminder.ts     Pure helpers: VAPID signing, time zones, when to remind
 ```
 
@@ -145,8 +152,8 @@ Done: planner (Anki as item category + Anki-only days, reviews, buffer,
 escalation, pacing), web app (wizard, Today with check-in, calendar,
 subjects, settings, approval banner, backup, offline PWA, dark mode).
 
-Next: see `docs/ROADMAP.md` – "Install app" button, then the backend (login, sync, push check-ins), the
-built-in assistant, the MCP server and "Import with AI".
+Also done: accounts + sync, AI imports, calendars, reminders, the
+"Tell StudyMaster…" box. Next: see `docs/ROADMAP.md` – the MCP server.
 
 When you make a design decision, add it to `docs/DECISIONS.md` and keep
 `docs/DESIGN.md` / `docs/ROADMAP.md` in sync.

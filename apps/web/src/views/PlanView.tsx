@@ -1,6 +1,7 @@
 import { addDays, daysBetween, eachDay, weekKey, fromDayNumber, sessionMinutes, type ISODate, type Subject } from "@studymaster/core";
 import { ChevronLeft, ChevronRight, GraduationCap, Layers, Palmtree } from "lucide-react";
 import { useMemo, useState } from "react";
+import { AssistantBox } from "../components/assistant";
 import { ProposalBanner } from "../components/proposal";
 import { KIND_ICON, SessionCard } from "../components/session";
 import { Badge, Button, Card, cx, Modal, SectionTitle, SubjectDot } from "../components/ui";
@@ -45,6 +46,8 @@ export function PlanView({ planner }: { planner: Planner }) {
           </Button>
         </div>
       </header>
+
+      <AssistantBox planner={planner} />
 
       <ProposalBanner planner={planner} />
 

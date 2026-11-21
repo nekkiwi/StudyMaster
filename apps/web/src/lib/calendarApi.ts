@@ -1,8 +1,8 @@
-/** Calendar links and AI timetables go through our Worker (signed-in users). */
+/** Calls to our Worker (signed-in users): calendar links, AI timetables, the helper. */
 import { idToken } from "./cloud";
 import type { WeeklyClass } from "./calendar";
 
-async function post<T>(path: string, payload: unknown): Promise<T> {
+export async function post<T>(path: string, payload: unknown): Promise<T> {
   const token = await idToken();
   if (!token) throw new Error("Please sign in first.");
   let res: Response;

@@ -55,6 +55,19 @@ export class Reminders extends DurableObject<Env> {
     return { next, devices: state.subscriptions.length };
   }
 
+  /**
+   * User instance: counts one assistant message for today (UTC). Returns
+   * false when the daily limit is reached.
+   */
+  async useQuota(limit: number, now = Date.now()): Promise<{ ok: boolean; left: number }> {
+    const day = new Date(now).toISOString().slice(0, 10);
+    const saved = await this.ctx.storage.get<{ day: string; count: number }>("quota");
+    const count = saved?.day === day ? saved.count : 0;
+    if (count >= limit) return { ok: false, left: 0 };
+    await this.ctx.storage.put("quota", { day, count: count + 1 });
+    return { ok: true, left: limit - count - 1 };
+  }
+
   async alarm(): Promise<void> {
     const state = await this.ctx.storage.get<ReminderState>("state");
     if (!state || state.subscriptions.length === 0) return;

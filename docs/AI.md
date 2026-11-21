@@ -16,7 +16,7 @@
 
 | Layer | Who | Setup for the user | Cost |
 |---|---|---|---|
-| 1. **Built-in assistant** ("Ask StudyMaster") | everyone | none | paid by us: cents per month at low traffic, or €0 on a free tier |
+| 1. **Built-in assistant** ("Tell StudyMaster…", built) | everyone | none | paid by us: cents per month at low traffic, or €0 on a free tier |
 | 2. **MCP connector** | people who use Claude | paste a URL in Claude once, log in | free for them (Claude Free allows one custom connector) |
 | 3. **Copy-paste prompts** | anyone with any chatbot | none | free |
 
@@ -38,6 +38,29 @@
   the assistant pauses; the rest of the app keeps working.
 - With the Claude API, the assistant can use our MCP server directly through
   the API's MCP connector, so there's only one tool implementation.
+
+### Built: "Tell StudyMaster…" box
+Code: `apps/api/src/assistant.ts` (Worker), `apps/web/src/lib/assistant.ts`
+(plan summary, checking + applying actions), `apps/web/src/components/assistant.tsx`.
+- **Not an open chat:** one input on Today and Plan ("Tell StudyMaster…") with
+  suggestion chips ("I'm sick today", "Am I on track?", "Make Saturdays free",
+  "I did everything today" when the check-in is open).
+- The app sends the message, the last 2 exchanges and a **compact plan
+  summary** (short ids like `s1`/`i4`, subjects with status, items with
+  progress, week, days off, sessions of open check-in days + the next 7
+  days; ~2–6k tokens). `POST /api/assistant` asks **Claude Haiku 5.5**
+  (structured output, effort low) for `{ reply, actions[] }`.
+- **Actions** (the only things it can do): `block_days`, `unblock_days`,
+  `set_exam`, `set_difficulty`, `set_week_day`, `add_items`, `set_progress`,
+  `check_in`, `add_subject`, `set_checkin_time`. Questions get a reply and
+  no actions.
+- The app **checks every action** (known ids, valid dates, open check-in
+  days, numbers clamped), maps ids back and shows each change in plain words.
+  **Nothing changes until "Apply"**; "Undo" restores the data from before.
+  The planner then re-plans as after any other change (approvals still apply).
+- Limits: signed in only, **30 messages per user and day** (counted in the
+  user's Durable Object), 20 AI calls per hour, Anthropic console spend cap.
+  Cost ≈ $0.0005 per message.
 
 ### 2. MCP server (Claude connector)
 - Hosted on the same Worker at `/mcp`, with OAuth login.

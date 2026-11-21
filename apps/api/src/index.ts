@@ -6,8 +6,12 @@
  * POST /api/toc  { text }  →  { chapters, lastPage }
  *   Reads a messy table of contents with Claude (3 reads, majority wins). Signed-in users only
  *   (Firebase ID token), limited per user. The key is a Worker secret.
+ *
+ * POST /api/assistant  { message, context, history }  →  { reply, actions, left }
+ *   "Tell StudyMaster…": proposes plan changes (the app previews them). 30 per user and day.
  */
 import Anthropic from "@anthropic-ai/sdk";
+import { askAssistant, DAILY_LIMIT, readRequest } from "./assistant";
 import { AuthError, verifyFirebaseToken } from "./firebase";
 import { allow } from "./rateLimit";
 import { fetchIcs, readTimetable } from "./calendar";
@@ -83,6 +87,20 @@ async function handleTimetable(request: Request, env: Env): Promise<Response> {
   return withClaude(env, (client) => readTimetable(client, b.data as string, b.mediaType as string));
 }
 
+async function handleAssistant(request: Request, env: Env): Promise<Response> {
+  if (!env.ANTHROPIC_API_KEY) return reply({ error: "The helper isn't set up on the server yet." }, 503);
+  const uid = await signedIn(request);
+  if (uid instanceof Response) return uid;
+  const input = readRequest(await body(request));
+  if (typeof input === "string") return reply({ error: input }, 400);
+  const quota = await env.REMINDERS.get(env.REMINDERS.idFromName(`user:${uid}`)).useQuota(DAILY_LIMIT);
+  if (!quota.ok) return reply({ error: `That's ${DAILY_LIMIT} messages today – the helper is back tomorrow.` }, 429);
+  return withClaude(env, async (client) => ({
+    ...(await askAssistant(client, input.message, input.context, input.history)),
+    left: quota.left,
+  }));
+}
+
 /** The server's public push key (for the browser's subscription). */
 async function handlePushKey(env: Env): Promise<Response> {
   const keys = await env.REMINDERS.get(env.REMINDERS.idFromName("vapid")).vapidKeys();
@@ -126,6 +144,7 @@ export default {
     if (url.pathname === "/api/toc") return handleToc(request, env);
     if (url.pathname === "/api/ics") return handleIcs(request);
     if (url.pathname === "/api/timetable") return handleTimetable(request, env);
+    if (url.pathname === "/api/assistant") return handleAssistant(request, env);
     if (url.pathname === "/api/push/key") return handlePushKey(env);
     if (url.pathname === "/api/push") return handlePush(request, env);
     if (url.pathname.startsWith("/api/")) return reply({ error: "Not found." }, 404);

@@ -388,7 +388,9 @@ Code: `apps/web/src/planner.ts`.
   buffer. Later plans that need **only those or fewer** are accepted silently;
   anything new asks again.
 - "Not now" hides the banner and shows a small "plan at risk" chip instead.
-- The same rules will apply to changes made by the AI assistant.
+- Changes made with "Tell StudyMaster…" go through the same rules: the box
+  only changes inputs (days off, exams, week, material, progress); the plan
+  that follows is approved like any other.
 
 ## 7. Check-in & re-planning
 
@@ -444,4 +446,4 @@ Code: `apps/web/src/planner.ts`.
 | Web app | `apps/web` – React 19, Vite 6, Tailwind 4, zustand, vite-plugin-pwa; UI primitives in `components/ui.tsx` |
 | Storage today | localStorage on the device (`studymaster-v1`), backup as JSON |
 | Backend (planned) | Cloudflare Workers + D1 + Cron Triggers – see [HOSTING.md](HOSTING.md) |
-| AI (planned) | Built-in assistant + MCP server sharing one set of tools – see [AI.md](AI.md) |
+| AI | "Tell StudyMaster…" box (built), table-of-contents and timetable reading (built), MCP server (planned) – see [AI.md](AI.md) |
