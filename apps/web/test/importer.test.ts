@@ -131,3 +131,52 @@ describe("buildDraft", () => {
     expect(mergeChunks(a!, b!)).toMatchObject({ title: "Lecture 1", recordingMinutes: 89, slides: 79 });
   });
 });
+
+describe("Anki decks", () => {
+  it("turns Subject::Lecture decks into subjects and lectures", async () => {
+    const { structureFromDecks } = await import("../src/lib/anki.js");
+    const { draftFromAnki } = await import("../src/lib/importer.js");
+    const structure = structureFromDecks([
+      "Default",
+      "Biology",
+      "Biology::Lecture 1",
+      "Biology::Lecture 2",
+      "Biology::Lecture 2::Extra",
+      "Spanish",
+    ]);
+    expect(structure).toEqual([
+      { subject: "Biology", lectures: ["Lecture 1", "Lecture 2"] },
+      { subject: "Spanish", lectures: [] },
+    ]);
+    const draft = draftFromAnki(structure, [], TODAY, 60);
+    expect(draft.subjects[0]!.chunks.map((c) => [c.title, c.recordingMinutes])).toEqual([
+      ["Lecture 1", 60],
+      ["Lecture 2", 60],
+    ]);
+    expect(draft.skipped).toEqual([{ name: "Spanish", reason: "Anki deck without lecture subdecks" }]);
+  });
+
+  it("leaves out lectures StudyMaster already has", async () => {
+    const { draftFromAnki } = await import("../src/lib/importer.js");
+    const existing = [{ id: "bio", name: "Biology", weight: 1 as const, examDate: "2026-12-20" }];
+    const draft = draftFromAnki(
+      [{ subject: "Biology", lectures: ["Lecture 1", "Lecture 2"] }, { subject: "Anatomy", lectures: ["Bones"] }],
+      existing,
+      TODAY,
+      60,
+      [{ subjectId: "bio", title: "Lecture 1" }],
+    );
+    expect(draft.subjects.map((s) => [s.name, s.chunks.map((c) => c.title)])).toEqual([
+      ["Biology", ["Lecture 2"]],
+      ["Anatomy", ["Bones"]],
+    ]);
+    const none = draftFromAnki([{ subject: "Biology", lectures: ["Lecture 1"] }], existing, TODAY, 60, [{ subjectId: "bio", title: "Lecture 1" }]);
+    expect(none.skipped).toEqual([{ name: "Biology", reason: "already in StudyMaster" }]);
+  });
+
+  it("names decks Subject::Lecture without breaking Anki's separator", async () => {
+    const { deckName } = await import("../src/lib/anki.js");
+    expect(deckName("Biology", "Lecture 3")).toBe("Biology::Lecture 3");
+    expect(deckName("Bio::Chem", 'Ch "1"')).toBe("Bio – Chem::Ch '1'");
+  });
+});

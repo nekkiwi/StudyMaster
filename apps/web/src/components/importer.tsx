@@ -1,5 +1,5 @@
 import { ArrowUpToLine, FileText, FolderOpen, ListTree, Loader2, Upload } from "lucide-react";
-import { useRef, useState, type DragEvent } from "react";
+import { useEffect, useRef, useState, type DragEvent } from "react";
 import { filesFromDrop, filesFromInput, readFiles, type PickedFile } from "../lib/fileReaders";
 import { todayISO } from "../lib/format";
 import { buildDraft, draftFromToc, mergeChunks, type Draft, type DraftChunk, type DraftSubject } from "../lib/importer";
@@ -13,10 +13,14 @@ type Stage = { kind: "choose" } | { kind: "reading"; done: number; total: number
  * Import material: files, folders or a pasted table of contents are turned
  * into subjects and chunks, then shown for review before anything is added.
  */
-export function ImportDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+export function ImportDialog({ open, onClose, initialDraft }: { open: boolean; onClose: () => void; initialDraft?: Draft }) {
   const subjects = useStore((s) => s.subjects);
   const importDraft = useStore((s) => s.importDraft);
   const [stage, setStage] = useState<Stage>({ kind: "choose" });
+  // A ready draft (e.g. from Anki decks) goes straight to the review.
+  useEffect(() => {
+    if (open && initialDraft) setStage({ kind: "review", draft: initialDraft });
+  }, [open, initialDraft]);
 
   const close = () => {
     setStage({ kind: "choose" });

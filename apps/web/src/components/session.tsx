@@ -1,5 +1,7 @@
 import { sessionMinutes, type ItemKind, type PlannedSession, type PlanItem, type Subject } from "@studymaster/core";
-import { BookOpen, Copy, Files, Layers, PenLine, Presentation, RotateCcw, Video } from "lucide-react";
+import { BookOpen, Copy, Files, Layers, PenLine, Play, Presentation, RotateCcw, Video } from "lucide-react";
+import { deckName } from "../lib/anki";
+import { useOpenAnki } from "./ankiConnect";
 import { formatMinutes, SLOT_LABEL } from "../lib/format";
 import { toast } from "./toast";
 import { Badge, cx, SubjectDot } from "./ui";
@@ -109,6 +111,8 @@ function AnkiRow({ item, subjects, compact }: { item: PlanItem; subjects: Map<st
   const names = deckNames(item, subjects);
   const newCards = item.anki?.newCards ?? 0;
   const search = ankiSearch(names, newCards > 0);
+  const openAnki = useOpenAnki();
+  const deck = names[0] ? deckName(names[0]) : "";
   const what =
     newCards > 0
       ? `Learn ~${newCards} new cards + review ${names.join(", ")}`
@@ -125,9 +129,18 @@ function AnkiRow({ item, subjects, compact }: { item: PlanItem; subjects: Map<st
       </div>
       <span className="text-xs text-slate-500 tabular-nums">{formatMinutes(item.minutes)}</span>
       {!compact && (
-        <button onClick={() => copy(search)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800" aria-label="Copy Anki search">
-          <Copy size={15} />
-        </button>
+        <>
+          <button onClick={() => copy(search)} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800" aria-label="Copy Anki search">
+            <Copy size={15} />
+          </button>
+          <button
+            onClick={() => openAnki(deck)}
+            className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-sky-500"
+            aria-label={deck ? `Open ${deck} in Anki` : "Open Anki"}
+          >
+            <Play size={13} /> Anki
+          </button>
+        </>
       )}
     </li>
   );

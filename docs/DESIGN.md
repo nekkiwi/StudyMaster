@@ -109,6 +109,30 @@ The real workflow: A) watch → read → write cards, then B) study Anki.
   (≥ 15 min), so reviews never pause. Only once cards exist. Free days in the
   weekly plan stay free.
 
+### Connecting to the Anki app
+Each Anki task has an **▶ Anki** button that opens the subject's deck
+(`Subject`, with lectures as `Subject::Lecture` subdecks):
+
+| Device | What happens | How |
+|---|---|---|
+| Desktop with Anki + **AnkiConnect** add-on (2055492159) | Anki opens review of exactly that deck | `guiDeckReview` via AnkiConnect on 127.0.0.1:8765 |
+| Desktop without AnkiConnect | AnkiWeb opens in a new tab + tip to connect | link |
+| iPhone (AnkiMobile) | AnkiMobile opens at that deck | `anki://x-callback-url/study?deck=…` – reported for AnkiMobile 25.07+, **not verified against the official docs; test on a device** |
+| Android (AnkiDroid) | AnkiDroid opens (not the exact deck) | `intent://…;package=com.ichi2.anki` – AnkiDroid only opens a specific deck for *installed apps* (explicit intent with a long `EXTRA_DECK_ID` to `com.ichi2.anki.IntentHandler`), which a web page can't send. A native wrapper (e.g. Capacitor) could, later. |
+
+**Connecting (desktop, Settings → Anki app):** install AnkiConnect, keep Anki
+open, press Connect → Anki shows an "allow this website?" popup
+(`requestPermission`). After that:
+- **Create my decks in Anki** – creates missing `Subject` and
+  `Subject::Lecture` decks (they reach the phone via AnkiWeb sync).
+- **Import subjects from Anki** – `Subject::Lecture` decks become subjects and
+  lectures in the same review list as file imports; lectures that already
+  exist are left out.
+- The connection is stored per device (`lib/device.ts`), never synced.
+
+AnkiWeb has no public API or "sign in with AnkiWeb", so an Anki account can't
+be used for login or for reading decks on phones.
+
 ## 4. Effort model
 
 Per chunk (all values are settings with these defaults):

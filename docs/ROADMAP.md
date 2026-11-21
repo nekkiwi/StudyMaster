@@ -14,6 +14,9 @@
 - ✅ **Material import**: folders / PDFs (bookmarks → chapters) / slides /
   PowerPoint / videos / pasted table of contents → detected subjects and
   lectures → review list (untick, edit, merge, move) → add.
+- ✅ **Anki app**: ▶ Anki button per Anki task (desktop: exact deck via
+  AnkiConnect; iPhone: AnkiMobile study link; Android: opens AnkiDroid),
+  connect desktop Anki, create decks, import subjects from Anki decks.
 - ✅ Docs, `CLAUDE.md`, GitHub Actions CI (typecheck, tests, build).
 
 ## Next, in order

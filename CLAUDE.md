@@ -58,8 +58,11 @@ apps/web/        React 19 + Vite 6 + Tailwind 4 PWA (zustand for state)
   src/lib/            format (dates, durations), bulk (quick chunk entry
                       parser), stats, colors, demo data,
                       importer (pure: files/TOC → draft subjects + chunks),
-                      fileReaders (browser: pdf.js, fflate, video length)
+                      fileReaders (browser: pdf.js, fflate, video length),
+                      anki (AnkiConnect client, deck names, phone links),
+                      device (per-device settings, never synced)
   src/components/importer.tsx  Import dialog: choose → read → review → add
+  src/components/ankiConnect.tsx  ▶ Anki button logic + Settings "Anki app"
 ```
 
 ## How the planner works (short)

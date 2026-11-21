@@ -311,3 +311,54 @@ export function draftFromToc(text: string, subjectName: string, existing: Subjec
     skipped: [],
   };
 }
+
+/**
+ * Draft from Anki decks ("Subject::Lecture"). Lectures that StudyMaster already
+ * has (same subject, same title) are left out. Sizes are unknown, so they're
+ * left for the user to fill in.
+ */
+export function draftFromAnki(
+  structure: { subject: string; lectures: string[] }[],
+  existing: Subject[],
+  today: ISODate,
+  defaultRecordingMinutes: number,
+  existingChunks: { subjectId: string; title: string }[] = [],
+): Draft {
+  const known = (subjectId: string | undefined, title: string) =>
+    !!subjectId && existingChunks.some((c) => c.subjectId === subjectId && c.title.trim().toLowerCase() === title.trim().toLowerCase());
+  const fresh = structure.map((s) => {
+    const match = matchSubject(s.subject, existing);
+    return { ...s, match, lectures: s.lectures.filter((l) => !known(match?.id, l)), hadLectures: s.lectures.length > 0 };
+  });
+  return {
+    subjects: fresh
+      .filter((s) => s.lectures.length > 0)
+      .map((s) => {
+        const match = s.match;
+        return {
+          id: draftId(),
+          include: true,
+          name: match?.name ?? s.subject,
+          existingId: match?.id,
+          examDate: addDays(today, 42),
+          chunks: s.lectures.map((title) => ({
+            id: draftId(),
+            include: true,
+            title,
+            recordingMinutes: defaultRecordingMinutes,
+            pages: 0,
+            slides: 0,
+            sources: ["Anki deck"],
+            number: lectureNumber(title),
+            note: "add pages or slides",
+          })),
+        };
+      }),
+    skipped: fresh
+      .filter((s) => s.lectures.length === 0)
+      .map((s) => ({
+        name: s.subject,
+        reason: s.hadLectures ? "already in StudyMaster" : "Anki deck without lecture subdecks",
+      })),
+  };
+}

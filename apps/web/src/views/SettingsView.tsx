@@ -8,6 +8,7 @@ import {
   RateSettings,
   RhythmSettings,
 } from "../components/settingsForm";
+import { AnkiConnectSection } from "../components/ankiConnect";
 import { toast } from "../components/toast";
 import { Button, Card, cx, Field, TextInput } from "../components/ui";
 import { todayISO } from "../lib/format";
@@ -15,20 +16,27 @@ import { exportData, useStore, type AppData } from "../store";
 
 function Section({ title, description, children, collapsible }: { title: string; description?: string; children: ReactNode; collapsible?: boolean }) {
   const [open, setOpen] = useState(!collapsible);
+  const heading = (
+    <div>
+      <h2 className="font-semibold">{title}</h2>
+      {description && <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{description}</p>}
+    </div>
+  );
   return (
     <Card>
-      <button
-        type="button"
-        disabled={!collapsible}
-        onClick={() => setOpen(!open)}
-        className="flex w-full items-start justify-between gap-3 text-left"
-      >
-        <div>
-          <h2 className="font-semibold">{title}</h2>
-          {description && <p className="mt-0.5 text-sm text-slate-500 dark:text-slate-400">{description}</p>}
-        </div>
-        {collapsible && <ChevronDown size={18} className={cx("mt-1 shrink-0 text-slate-400 transition", open && "rotate-180")} />}
-      </button>
+      {collapsible ? (
+        <button
+          type="button"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+          className="flex w-full items-start justify-between gap-3 text-left"
+        >
+          {heading}
+          <ChevronDown size={18} className={cx("mt-1 shrink-0 text-slate-400 transition", open && "rotate-180")} />
+        </button>
+      ) : (
+        heading
+      )}
       {open && <div className="mt-5">{children}</div>}
     </Card>
   );
@@ -92,7 +100,10 @@ export function SettingsView() {
           <Section title="Days off" description="Vacation, breaks, sick days: nothing gets planned on these.">
             <DaysOffEditor />
           </Section>
-          <Section title="Anki" description="Every session ends with Anki: the new cards plus reviews." collapsible>
+          <Section title="Anki app" description="Open the right deck with one tap, create decks, or import subjects from Anki.">
+            <AnkiConnectSection />
+          </Section>
+          <Section title="Anki timing" description="Every session ends with Anki: the new cards plus reviews." collapsible>
             <AnkiSettingsForm />
           </Section>
           <Section title="Time estimates" description="Recordings, reading and writing cards. Reading and cards are scaled by the subject weight." collapsible>
