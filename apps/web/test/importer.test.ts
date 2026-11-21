@@ -377,7 +377,9 @@ describe("day colors", () => {
 describe("adding a section in the review", () => {
   it("starts empty with 0 pages and no warning", async () => {
     const { newDraftChunk } = await import("../src/lib/importer.js");
-    expect(newDraftChunk()).toMatchObject({ title: "", pages: 0, slides: 0, recordingMinutes: 0, include: true, note: undefined });
+    const chunk = newDraftChunk();
+    expect(chunk).toMatchObject({ title: "", pages: 0, slides: 0, recordingMinutes: 0, include: true });
+    expect(chunk.note).toBeUndefined();
   });
 });
 
