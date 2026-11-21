@@ -49,7 +49,7 @@ export function PlanView({ planner }: { planner: Planner }) {
       <ProposalBanner planner={planner} />
 
       {/* The week is the main view; the overview of all weeks comes below. */}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-7">
+      <div className="grid grid-cols-1 gap-3 lg:grid-cols-7">
         {days.map((d) => (
           <DayColumn key={d} date={d} planner={planner} subjects={subjects} onOpen={() => setOpenDay(d)} />
         ))}
@@ -123,7 +123,7 @@ function DayColumn({
       onClick={onOpen}
       style={background ? { backgroundImage: background } : undefined}
       className={cx(
-        "flex flex-col rounded-2xl border p-3 text-left transition hover:shadow-md md:min-h-64",
+        "flex min-w-0 flex-col rounded-2xl border p-3 text-left transition hover:shadow-md lg:min-h-64",
         isToday
           ? "border-indigo-300 bg-white ring-2 ring-indigo-500/15 dark:border-indigo-500/50 dark:bg-slate-900"
           : "border-slate-200/80 bg-white dark:border-slate-800 dark:bg-slate-900",
@@ -131,11 +131,11 @@ function DayColumn({
         past && "opacity-60",
       )}
     >
-      <div className="mb-2 flex items-baseline justify-between gap-2 md:block">
+      <div className="mb-2 flex items-baseline justify-between gap-2 lg:block">
         <p className={cx("text-sm font-semibold whitespace-nowrap", isToday && "text-indigo-600 dark:text-indigo-400")}>
           {weekdayShort(date)} <span className="font-normal text-slate-500">{formatShort(date)}</span>
         </p>
-        <p className="text-[11px] text-slate-400 tabular-nums md:h-4">{total > 0 ? formatMinutes(total) : ""}</p>
+        <p className="text-[11px] text-slate-400 tabular-nums lg:h-4">{total > 0 ? formatMinutes(total) : ""}</p>
       </div>
 
       <div className="flex flex-1 flex-col gap-1.5">
@@ -243,9 +243,9 @@ function Overview({ planner, onPickWeek, weekStart }: { planner: Planner; onPick
       <SectionTitle action={<span className="text-xs text-slate-400">{daysBetween(today, last)} days to the last exam</span>}>
         Overview
       </SectionTitle>
-      <div className="flex flex-col gap-6 md:flex-row md:items-start">
+      <div className="flex flex-col gap-6 lg:flex-row lg:items-start">
         {weeks.length <= 6 ? (
-        <div className="grid w-full max-w-sm grid-cols-7 gap-1.5 self-center md:self-start">
+        <div className="grid w-full max-w-sm grid-cols-7 gap-1.5 self-center lg:self-start">
           {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
             <span key={i} className="text-center text-[10px] text-slate-400">{d}</span>
           ))}
@@ -374,7 +374,7 @@ function CompactCalendar({
 }) {
   const monthOf = (d: ISODate) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { month: "short" });
   return (
-    <div className="w-full min-w-0 md:max-w-xl">
+    <div className="w-full min-w-0 lg:max-w-xl">
       <div className="overflow-x-auto pb-2">
         <div className="flex gap-1">
           <div className="flex shrink-0 flex-col gap-1 pr-1 pt-5 text-[9px] leading-[14px] text-slate-400">

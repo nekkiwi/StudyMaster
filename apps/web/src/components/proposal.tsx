@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { EscalationLevel, PlanResult } from "@studymaster/core";
 import { AlertTriangle, CalendarPlus, ShieldCheck } from "lucide-react";
 import { formatDay, SLOT_LABEL } from "../lib/format";
@@ -21,6 +22,7 @@ function slotsText(result: PlanResult): string[] {
 }
 
 export function ProposalBanner({ planner }: { planner: Planner }) {
+  const [showAll, setShowAll] = useState(false);
   const approve = useStore((s) => s.approve);
   const decline = useStore((s) => s.decline);
   const clearDecline = useStore((s) => s.clearDecline);
@@ -78,11 +80,16 @@ export function ProposalBanner({ planner }: { planner: Planner }) {
           </ul>
           {slots.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {slots.map((s) => (
+              {(showAll ? slots : slots.slice(0, 3)).map((s) => (
                 <span key={s} className="rounded-lg bg-white/70 px-2 py-1 text-xs font-medium dark:bg-slate-900/60">
                   {s}
                 </span>
               ))}
+              {slots.length > 3 && (
+                <button type="button" onClick={() => setShowAll(!showAll)} className="rounded-lg px-2 py-1 text-xs font-medium text-slate-600 underline hover:text-slate-900 dark:text-slate-300">
+                  {showAll ? "Show less" : `+ ${slots.length - 3} more`}
+                </button>
+              )}
             </div>
           )}
           {proposal.level === "infeasible" && (

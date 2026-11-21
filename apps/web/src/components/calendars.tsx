@@ -121,9 +121,11 @@ export function CalendarSection({ compact }: { compact?: boolean }) {
                   {list.length} event{list.length === 1 ? "" : "s"} in your planning period
                   {next ? ` · next: ${WEEKDAY[((new Date(`${next.date}T12:00:00`).getDay() + 6) % 7) + 1]} ${formatShort(next.date)} ${toClock(next.start)} ${next.title}` : ""}
                 </p>
-                <div className="mt-2 flex flex-wrap items-center gap-2">
-                  <Toggle checked={c.block} onChange={(block) => save({ ...c, block })} label="Plan around these events" />
-                  <span className="ml-auto flex gap-1">
+                <div className="mt-2 flex items-center gap-2">
+                  <div className="min-w-0 flex-1">
+                    <Toggle checked={c.block} onChange={(block) => save({ ...c, block })} label="Plan around these events" />
+                  </div>
+                  <span className="flex shrink-0 gap-1">
                     {c.kind !== "file" && (
                       <Button size="sm" variant="ghost" onClick={() => refresh(c)} disabled={busy === c.id} aria-label={`Update ${c.name}`}>
                         {busy === c.id ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />}
@@ -160,20 +162,20 @@ export function SessionTimes() {
   ] as const;
   return (
     <Field label="Session times" hint="A session is skipped when a class takes more than 30 minutes of it." group>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+      <div className="space-y-2">
         {rows.map(([slot, label]) => (
           <div key={slot} className="flex items-center gap-2 text-sm">
             <span className="w-24 shrink-0 text-slate-600 dark:text-slate-400">{label}</span>
             <TextInput
               type="time"
-              className="w-28"
+              className="min-w-0 flex-1 sm:max-w-36"
               value={toClock(times[slot].start)}
               onChange={(e) => e.target.value && update({ slotTimes: { ...times, [slot]: { ...times[slot], start: toMinutes(e.target.value) } } })}
             />
             <span className="text-slate-400">–</span>
             <TextInput
               type="time"
-              className="w-28"
+              className="min-w-0 flex-1 sm:max-w-36"
               value={toClock(times[slot].end)}
               onChange={(e) => e.target.value && update({ slotTimes: { ...times, [slot]: { ...times[slot], end: toMinutes(e.target.value) } } })}
             />
