@@ -8,12 +8,12 @@
  * Leave apiKey empty to run without accounts: the sign-in UI is then hidden.
  */
 export const firebaseConfig = {
-  apiKey: "",
-  authDomain: "",
-  projectId: "",
-  storageBucket: "",
-  messagingSenderId: "",
-  appId: "",
+  apiKey: "AIzaSyBUHNvm-8QUKD5JaRi2QIIftWBPTQ9Powo",
+  authDomain: "studymaster-caa36.firebaseapp.com",
+  projectId: "studymaster-caa36",
+  storageBucket: "studymaster-caa36.firebasestorage.app",
+  messagingSenderId: "297970173514",
+  appId: "1:297970173514:web:73c7f6b85a4b3f0d4e48b3",
 };
 
 /**
