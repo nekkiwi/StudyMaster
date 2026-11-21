@@ -72,22 +72,30 @@ apps/web/        React 19 + Vite 6 + Tailwind 4 PWA (zustand for state)
                       anki (AnkiConnect client, deck names, phone links,
                       deck linking: collections/subdecks/matchDecks),
                       ankiSync (deck ids/renames, card + due counts from Anki),
+                      calendar (ICS parsing with ical.js, weekly timetable
+                      classes → events, busy times), calendarApi (Worker calls),
                       device (per-device settings, never synced),
                       cloud + firebaseConfig (Firebase, loaded on demand)
   src/components/importer.tsx  Import dialog: choose → read → review → add
   src/components/ankiConnect.tsx  ▶ Anki button logic, Settings "Anki app",
                       "From Anki" import picker, subject editor deck links
   src/components/account.tsx  Sign-in form (landing page + dialog), account chip/section
+  src/components/calendars.tsx  Calendars & timetable: add (link/.ics/AI), list,
+                      session times, auto refresh
 apps/api/        Cloudflare Worker code (same Worker as the site, only /api/*)
   src/index.ts        Router – only a default export allowed (see HOSTING.md)
   src/firebase.ts     Firebase ID token check (no library)
   src/toc.ts          POST /api/toc: table of contents → chapters with Claude
                       Haiku 5.5 (structured output). Secret ANTHROPIC_API_KEY.
+  src/calendar.ts     POST /api/ics (fetch calendar links, no CORS in browsers),
+                      POST /api/timetable (PDF/photo → weekly classes, Claude)
 ```
 
 ## How the planner works (short)
 
-1. Build slots from `from` to the last exam. Up to 4 per day: `am1, am2, pm1, pm2`.
+1. Build slots from `from` to the last exam. Up to 4 per day: `am1, am2, pm1, pm2`
+   (clock times in `settings.slotTimes`; a slot covered > 30 min by a class
+   from a blocking calendar – `StudyState.busy` – is left out).
    `normal` slots come from the weekly plan (`settings.week`: 0/1/2 sessions
    per morning/afternoon; default weekday afternoons + weekend mornings). On
    study days, more slots up to `maxSessionsPerDay` are `extra`; free days get

@@ -19,6 +19,7 @@ import { demoData } from "./lib/demo";
 import { newId, todayISO } from "./lib/format";
 import type { Draft } from "./lib/importer";
 import { reconcileDecks, type AnkiReading } from "./lib/ankiSync";
+import type { CalEvent, CalendarSource } from "./lib/calendar";
 
 export interface CheckInRecord {
   answer: "yes" | "no";
@@ -51,6 +52,10 @@ export interface AppData {
   ankiDue?: Record<string, Record<ISODate, number>>;
   /** When the numbers were last read from Anki (ISO timestamp). */
   ankiReadAt?: string;
+  /** Connected calendars and timetables (university classes etc.). */
+  calendars?: CalendarSource[];
+  /** Their events in the planning period, per calendar id. */
+  calendarEvents?: Record<string, CalEvent[]>;
 }
 
 interface Actions {
@@ -76,6 +81,10 @@ interface Actions {
 
   /** Takes what was read from Anki: renamed decks, deck ids, card counts, due counts. */
   applyAnkiReading(reading: AnkiReading): void;
+
+  /** Adds or updates a calendar together with its events. */
+  saveCalendar(source: CalendarSource, events?: CalEvent[]): void;
+  removeCalendar(id: string): void;
 
   checkIn(date: ISODate, answer: "yes" | "no", results: ItemResult[], record: CheckInRecord["items"]): void;
   undoCheckIn(date: ISODate): void;
@@ -230,6 +239,20 @@ export const useStore = create<Store>()(
           };
         }),
 
+      saveCalendar: (source, events) =>
+        set((s) => {
+          const list = s.calendars ?? [];
+          return {
+            calendars: list.some((c) => c.id === source.id) ? list.map((c) => (c.id === source.id ? source : c)) : [...list, source],
+            ...(events ? { calendarEvents: { ...s.calendarEvents, [source.id]: events } } : {}),
+          };
+        }),
+      removeCalendar: (id) =>
+        set((s) => {
+          const { [id]: _gone, ...rest } = s.calendarEvents ?? {};
+          return { calendars: (s.calendars ?? []).filter((c) => c.id !== id), calendarEvents: rest };
+        }),
+
       updateSettings: (patch) => set((s) => ({ settings: withDefaults({ ...s.settings, ...patch }) })),
       setCheckInTime: (time) => set({ checkInTime: time }),
 
@@ -257,8 +280,8 @@ export const useStore = create<Store>()(
       version: 1,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => {
-        const { setupDone, startDate, subjects, chunks, blocked, settings, checkIns, approval, declinedKey, checkInTime, ankiDue, ankiReadAt } = s;
-        return { setupDone, startDate, subjects, chunks, blocked, settings, checkIns, approval, declinedKey, checkInTime, ankiDue, ankiReadAt };
+        const { setupDone, startDate, subjects, chunks, blocked, settings, checkIns, approval, declinedKey, checkInTime, ankiDue, ankiReadAt, calendars, calendarEvents } = s;
+        return { setupDone, startDate, subjects, chunks, blocked, settings, checkIns, approval, declinedKey, checkInTime, ankiDue, ankiReadAt, calendars, calendarEvents };
       },
       merge: (persisted, current) => {
         const data = (persisted ?? {}) as Partial<AppData>;
@@ -281,8 +304,8 @@ export function upgradeSettings(saved: Partial<Settings> | undefined): Settings 
 
 export function exportData(): AppData {
   const s = useStore.getState();
-  const { setupDone, startDate, subjects, chunks, blocked, settings, checkIns, approval, declinedKey, checkInTime, ankiDue, ankiReadAt } = s;
-  return { setupDone, startDate, subjects, chunks, blocked, settings, checkIns, approval, declinedKey, checkInTime, ankiDue, ankiReadAt };
+  const { setupDone, startDate, subjects, chunks, blocked, settings, checkIns, approval, declinedKey, checkInTime, ankiDue, ankiReadAt, calendars, calendarEvents } = s;
+  return { setupDone, startDate, subjects, chunks, blocked, settings, checkIns, approval, declinedKey, checkInTime, ankiDue, ankiReadAt, calendars, calendarEvents };
 }
 
 /**

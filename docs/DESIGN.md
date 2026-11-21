@@ -143,6 +143,29 @@ subject's study time – more material, more review – split into review
 sessions (≤ 70 % of a session each, up to 6) in the last free slots before
 the exam; main study must be done before the first one.
 
+### Calendars & timetable
+Classes block study time: Settings → Calendars & timetable (also in the
+onboarding week step). Each calendar is a university calendar or not, and
+"Plan around these events" (default on); any number can be added.
+- **Calendar link (ICS)** with step-by-step help for Google Calendar (secret
+  iCal address), Outlook/Microsoft 365 (publish calendar), Apple iCloud
+  (public calendar, webcal://) and university portals. Fetched by the
+  Worker (`/api/ics`, signed-in only – browsers can't fetch them: no CORS),
+  refreshed every 6 h while the app is open.
+- **.ics file**: read on the device.
+- **Timetable PDF or photo**: Claude Haiku reads weekly classes
+  (`/api/timetable`, weekday, times, odd/even weeks, semester dates); the user
+  checks/edits them before saving; they're repeated for the planning period.
+- Recurring events are expanded with ical.js (RRULE, EXDATE, moved dates via
+  RECURRENCE-ID, time zones); all-day events are ignored.
+- Sessions have clock times (`settings.slotTimes`, default 8:00–10:30,
+  10:30–13:00, 14:00–16:30, 16:30–19:00); a session covered more than 30 min
+  by a blocking event is left out, so the plan goes around classes (and asks
+  for extra sessions if it doesn't fit). Classes show in grey in the week view.
+- Events of the planning period are stored with the plan and synced.
+- Later: "Sign in with Google/Microsoft" to pick calendars directly (needs
+  OAuth app verification).
+
 ### Books without bookmarks
 A PDF book without bookmarks is read through its printed table of contents
 (pages near the start with an "Inhalt/Contents" heading, plus following

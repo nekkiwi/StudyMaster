@@ -26,8 +26,9 @@
 - ✅ Import inside the subject editor.
 - ✅ Study style (steps + order), onboarding "How you study" + Anki setup
   step, exam review scaled with material, four-sessions preset.
-- ⏳ Calendar integration: university calendars (ICS links, .ics files,
-  timetable PDFs via AI) block study slots.
+- ✅ Calendar integration: university calendars (ICS links, .ics files,
+  timetable PDFs/photos via AI) block study sessions; week view shows classes.
+- ⏳ "Sign in with Google / Microsoft" to pick calendars directly (OAuth).
 - ⏳ Android: start *studying* the exact deck. Options: propose a
   `anki://x-callback-url/study?deck=` deep link to AnkiDroid (like AnkiMobile),
   or ship StudyMaster as an Android app that sends AnkiDroid's review intent

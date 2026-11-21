@@ -537,3 +537,22 @@ describe("study style (workflow)", () => {
     expect(reviewSessions).toBeGreaterThan(1);
   });
 });
+
+describe("calendar: busy times", () => {
+  it("leaves out sessions taken by classes and plans around them", () => {
+    const st = state([subject("bio", "2026-12-20")], chunks("bio", 6));
+    // Monday: a lecture 8:15–9:45 takes most of morning 1 (8:00–10:30).
+    const busy = [{ date: MON, start: 8 * 60 + 15, end: 9 * 60 + 45, title: "Biochemistry" }];
+    const free = buildSlotGrid(st, MON, MON).map((x) => x.slot);
+    const taken = buildSlotGrid({ ...st, busy }, MON, MON).map((x) => x.slot);
+    expect(free).toContain("am1");
+    expect(taken).not.toContain("am1");
+    expect(taken).toContain("pm1");
+    // A short overlap (≤ 30 min) doesn't take the session.
+    const short = [{ date: MON, start: 10 * 60 + 15, end: 11 * 60 }];
+    expect(buildSlotGrid({ ...st, busy: short }, MON, MON).map((x) => x.slot)).toContain("am1");
+    // The plan still fits the work, just not in the taken session.
+    const plan = planOnce({ ...st, busy }, MON, normal);
+    expect(plan.sessions.some((x) => x.date === MON && x.slot === "am1")).toBe(false);
+  });
+});

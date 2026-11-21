@@ -10,6 +10,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { AuthError, verifyFirebaseToken } from "./firebase";
 import { allow } from "./rateLimit";
+import { fetchIcs, readTimetable } from "./calendar";
 import { MAX_TEXT, readTocStable, TocError } from "./toc";
 
 // Only the default export may be exported from this file: Cloudflare treats
@@ -26,10 +27,9 @@ const FIREBASE_PROJECT = "studymaster-caa36";
 const reply = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json", "cache-control": "no-store" } });
 
-async function handleToc(request: Request, env: Env): Promise<Response> {
+/** Signed-in user (Firebase ID token) within the rate limit, or an error response. */
+async function signedIn(request: Request): Promise<string | Response> {
   if (request.method !== "POST") return reply({ error: "Use POST." }, 405);
-  if (!env.ANTHROPIC_API_KEY) return reply({ error: "AI import isn't set up on the server yet." }, 503);
-
   const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
   let uid: string;
   try {
@@ -37,20 +37,54 @@ async function handleToc(request: Request, env: Env): Promise<Response> {
   } catch (e) {
     return reply({ error: e instanceof AuthError ? "Please sign in again." : "Sign-in check failed." }, 401);
   }
-  if (!allow(uid)) return reply({ error: "That's a lot of AI reads – please try again in an hour." }, 429);
+  if (!allow(uid)) return reply({ error: "That's a lot at once – please try again in an hour." }, 429);
+  return uid;
+}
 
-  let text: unknown;
+async function body<T>(request: Request): Promise<T | undefined> {
   try {
-    text = ((await request.json()) as { text?: unknown }).text;
+    return (await request.json()) as T;
   } catch {
-    return reply({ error: "Send JSON: { text }." }, 400);
+    return undefined;
   }
+}
+
+async function handleToc(request: Request, env: Env): Promise<Response> {
+  if (!env.ANTHROPIC_API_KEY) return reply({ error: "AI import isn't set up on the server yet." }, 503);
+  const uid = await signedIn(request);
+  if (uid instanceof Response) return uid;
+  const text = (await body<{ text?: unknown }>(request))?.text;
   if (typeof text !== "string" || !text.trim()) return reply({ error: "No text to read." }, 400);
   if (text.length > MAX_TEXT * 2) return reply({ error: "That's too much text for a table of contents." }, 413);
+  return withClaude(env, (client) => readTocStable(client, text));
+}
 
+async function handleIcs(request: Request): Promise<Response> {
+  const uid = await signedIn(request);
+  if (uid instanceof Response) return uid;
+  const url = (await body<{ url?: unknown }>(request))?.url;
+  if (typeof url !== "string") return reply({ error: "Send JSON: { url }." }, 400);
+  try {
+    return reply({ ics: await fetchIcs(url) });
+  } catch (e) {
+    return e instanceof TocError ? reply({ error: e.message }, e.status) : reply({ error: "Couldn't read that calendar." }, 500);
+  }
+}
+
+async function handleTimetable(request: Request, env: Env): Promise<Response> {
+  if (!env.ANTHROPIC_API_KEY) return reply({ error: "AI isn't set up on the server yet." }, 503);
+  const uid = await signedIn(request);
+  if (uid instanceof Response) return uid;
+  const b = await body<{ data?: unknown; mediaType?: unknown }>(request);
+  if (typeof b?.data !== "string" || typeof b.mediaType !== "string") return reply({ error: "Send JSON: { data, mediaType }." }, 400);
+  return withClaude(env, (client) => readTimetable(client, b.data as string, b.mediaType as string));
+}
+
+/** Runs a Claude call and turns errors into friendly answers. */
+async function withClaude(env: Env, run: (client: Anthropic) => Promise<unknown>): Promise<Response> {
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 1 });
   try {
-    return reply(await readTocStable(client, text));
+    return reply(await run(client));
   } catch (e) {
     if (e instanceof TocError) return reply({ error: e.message }, e.status);
     if (e instanceof Anthropic.RateLimitError) return reply({ error: "The AI is busy – please try again in a minute." }, 429);
@@ -66,6 +100,8 @@ export default {
   async fetch(request, env): Promise<Response> {
     const url = new URL(request.url);
     if (url.pathname === "/api/toc") return handleToc(request, env);
+    if (url.pathname === "/api/ics") return handleIcs(request);
+    if (url.pathname === "/api/timetable") return handleTimetable(request, env);
     if (url.pathname.startsWith("/api/")) return reply({ error: "Not found." }, 404);
     return env.ASSETS.fetch(request);
   },

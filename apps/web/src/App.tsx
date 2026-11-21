@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useAccount, wasSignedIn } from "./account";
 import { AccountChip, SignInDialog } from "./components/account";
 import { AnkiAutoSync, AnkiPromptDialog } from "./components/ankiConnect";
+import { CalendarAutoRefresh } from "./components/calendars";
 import { toast, Toaster } from "./components/toast";
 import { cx } from "./components/ui";
 import { formatShort } from "./lib/format";
@@ -145,6 +146,7 @@ function Main() {
       <Toaster />
       <AnkiPromptDialog />
       <AnkiAutoSync />
+      <CalendarAutoRefresh />
     </div>
   );
 }

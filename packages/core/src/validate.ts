@@ -60,6 +60,9 @@ export function validateState(state: StudyState): string[] {
   if (when !== "auto" && (when.weekday < 0 || when.weekday > 6)) {
     errors.push("Weekly buffer weekday must be 0 (Sunday) to 6 (Saturday).");
   }
+  for (const [slot, t] of Object.entries(s.slotTimes)) {
+    if (!(t.start >= 0 && t.end <= 24 * 60 && t.start < t.end)) errors.push(`Session time for ${slot} is invalid.`);
+  }
   if (!Array.isArray(s.workflow) || s.workflow.length === 0) errors.push("Pick at least one way to study.");
   else if (s.workflow.some((a) => !ACTIVITIES.includes(a))) errors.push("The study style contains an unknown step.");
   for (const [subjectId, days] of Object.entries(state.ankiDue ?? {})) {

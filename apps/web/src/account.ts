@@ -221,7 +221,7 @@ async function startWatching(uid: string): Promise<void> {
 }
 
 /** Every local change is uploaded shortly after (when signed in). */
-const DATA_KEYS = ["setupDone", "startDate", "subjects", "chunks", "blocked", "settings", "checkIns", "approval", "declinedKey", "checkInTime", "ankiDue"] as const;
+const DATA_KEYS = ["setupDone", "startDate", "subjects", "chunks", "blocked", "settings", "checkIns", "approval", "declinedKey", "checkInTime", "ankiDue", "calendars", "calendarEvents"] as const;
 useStore.subscribe((state, prev) => {
   if (applyingRemote || !DATA_KEYS.some((k) => state[k] !== prev[k])) return;
   writeMeta({ ...readMeta(), localAt: Date.now() });

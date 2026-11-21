@@ -173,10 +173,24 @@ export interface Settings {
    * comes before every chunk step, else last.
    */
   workflow: Activity[];
+  /** Clock times of the sessions (to plan around classes from calendars). */
+  slotTimes: SlotTimes;
   rates: Rates;
   anki: AnkiSettings;
   weeklyBuffer: WeeklyBuffer;
 }
+
+/** A time taken by something else (a class from the university calendar), local time. */
+export interface BusyTime {
+  date: ISODate;
+  /** Minutes after midnight. */
+  start: number;
+  end: number;
+  title?: string;
+}
+
+/** When a session roughly happens, in minutes after midnight. */
+export type SlotTimes = Record<SlotId, { start: number; end: number }>;
 
 export interface StudyState {
   subjects: Subject[];
@@ -188,6 +202,8 @@ export interface StudyState {
    * next days. Subjects and dates without a number are estimated.
    */
   ankiDue?: Record<string, Record<ISODate, number>>;
+  /** Times taken by classes etc.; sessions that overlap them aren't used. */
+  busy?: BusyTime[];
 }
 
 /**

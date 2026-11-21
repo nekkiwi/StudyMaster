@@ -37,6 +37,13 @@ export const DEFAULT_SETTINGS: Settings = {
   defaultRecordingMinutes: 60,
   // Read the material → make Anki cards → study Anki.
   workflow: ["read", "cards", "anki"],
+  // 8:00–10:30, 10:30–13:00, 14:00–16:30, 16:30–19:00.
+  slotTimes: {
+    am1: { start: 8 * 60, end: 10 * 60 + 30 },
+    am2: { start: 10 * 60 + 30, end: 13 * 60 },
+    pm1: { start: 14 * 60, end: 16 * 60 + 30 },
+    pm2: { start: 16 * 60 + 30, end: 19 * 60 },
+  },
   rates: {
     recordingFactor: 1,
     readPerPage: 3,
@@ -68,6 +75,7 @@ export function withDefaults(partial: Partial<Settings> = {}): Settings {
     weeklyBuffer: { ...DEFAULT_SETTINGS.weeklyBuffer, ...partial.weeklyBuffer },
     week: (partial.week ?? DEFAULT_SETTINGS.week).map((d) => ({ ...d })) as WeekPlan,
     workflow: cleanWorkflow(partial.workflow ?? DEFAULT_SETTINGS.workflow),
+    slotTimes: { ...DEFAULT_SETTINGS.slotTimes, ...partial.slotTimes },
   };
 }
 

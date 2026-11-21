@@ -4,11 +4,16 @@ import { useMemo, useState } from "react";
 import { ProposalBanner } from "../components/proposal";
 import { KIND_ICON, SessionCard } from "../components/session";
 import { Badge, Button, Card, cx, Modal, SectionTitle, SubjectDot } from "../components/ui";
+import { toClock } from "../lib/calendar";
 import { dayBackground, subjectColor } from "../lib/colors";
 import { formatDay, formatMinutes, formatShort, SLOT_LABEL, weekdayShort } from "../lib/format";
 import { daySubjects } from "../lib/stats";
 import type { Planner } from "../planner";
 import { useStore } from "../store";
+
+// Stable empty defaults: a new [] / {} in a store selector re-renders forever.
+const NO_LIST: never[] = [];
+const NO_MAP: Record<string, never> = {};
 
 const BLOCK_LABEL = { vacation: "Vacation", sick: "Sick", break: "Break", other: "Off" };
 
@@ -91,7 +96,15 @@ function DayColumn({
   onOpen: () => void;
 }) {
   const checkIns = useStore((s) => s.checkIns);
+  const calendars = (useStore((s) => s.calendars) ?? NO_LIST);
+  const calendarEvents = (useStore((s) => s.calendarEvents) ?? NO_MAP);
+  const slotTimes = useStore((s) => s.settings.slotTimes);
   const { today, shown, state } = planner;
+  // Classes etc. from calendars that block study time, in time order.
+  const classes = calendars
+    .filter((c) => c.block)
+    .flatMap((c) => (calendarEvents[c.id] ?? []).filter((e) => e.date === date))
+    .sort((a, b) => a.start - b.start);
   const sessions = shown.plan.sessions.filter((s) => s.date === date);
   const buffer = shown.plan.bufferSlots.filter((s) => s.date === date);
   const exams = state.subjects.filter((s) => s.examDate === date);
@@ -142,7 +155,10 @@ function DayColumn({
           </Badge>
         )}
 
-        {sessions.map((s) => (
+        {/* Sessions and classes in time order. */}
+        {[
+          ...sessions.map((s) => ({ start: slotTimes[s.slot].start, node: (
+
           <div
             key={s.slot}
             className={cx(
@@ -178,9 +194,21 @@ function DayColumn({
               </p>
             )}
           </div>
-        ))}
+        
+          ) })),
+          ...classes.map((e, i) => ({
+            start: e.start,
+            node: (
+              <div key={`class-${i}`} className="truncate rounded-lg bg-slate-200/70 px-2 py-1 text-[11px] text-slate-600 dark:bg-slate-800 dark:text-slate-300" title={`${toClock(e.start)}–${toClock(e.end)} ${e.title}`}>
+                <span className="font-medium tabular-nums">{toClock(e.start)}</span> {e.title}
+              </div>
+            ),
+          })),
+        ]
+          .sort((x, y) => x.start - y.start)
+          .map((x) => x.node)}
 
-        {sessions.length === 0 && buffer.length === 0 && exams.length === 0 && !block && !record && (
+        {sessions.length === 0 && buffer.length === 0 && exams.length === 0 && !block && !record && classes.length === 0 && (
           <p className="text-xs text-slate-400">{past ? "" : "Free"}</p>
         )}
         {buffer.length > 0 && (

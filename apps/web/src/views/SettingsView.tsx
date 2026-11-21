@@ -12,6 +12,7 @@ import {
   SplittingSettings,
 } from "../components/settingsForm";
 import { AccountSection } from "../components/account";
+import { CalendarSection } from "../components/calendars";
 import { AnkiConnectSection } from "../components/ankiConnect";
 import { toast } from "../components/toast";
 import { Button, Card, cx, Field, TextInput } from "../components/ui";
@@ -91,6 +92,9 @@ export function SettingsView() {
         <div className="space-y-6">
           <Section title="Account" description="Sign in to keep your plan safe and in sync on all your devices.">
             <AccountSection />
+          </Section>
+          <Section title="Calendars & timetable" description="Your classes: the plan goes around them.">
+            <CalendarSection />
           </Section>
           <Section title="How you study" description="The steps for each lecture or chapter, in your order.">
             <StudyStyleEditor />

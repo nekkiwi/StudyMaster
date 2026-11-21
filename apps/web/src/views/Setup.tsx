@@ -2,6 +2,7 @@ import { addDays, planWithEscalation, type Subject } from "@studymaster/core";
 import { ArrowLeft, ArrowRight, CalendarDays, Check, GraduationCap, Layers, Loader2, Plus, Sparkles, Trash2, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { AnkiOnboarding } from "../components/ankiConnect";
+import { CalendarSection } from "../components/calendars";
 import { BufferSettings, DaysOffEditor, RhythmSettings, StudyStyleEditor } from "../components/settingsForm";
 import { useAccount } from "../account";
 import { SignInForm } from "../components/account";
@@ -339,6 +340,13 @@ function WeekStep() {
       <div className="space-y-4">
         <Card>
           <RhythmSettings />
+        </Card>
+        <Card>
+          <h3 className="mb-1 flex items-center gap-2 font-semibold">
+            <CalendarDays size={18} className="text-indigo-600" /> Classes at the university?
+          </h3>
+          <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">Optional – the plan then goes around your timetable.</p>
+          <CalendarSection />
         </Card>
         <Card>
           <BufferSettings />

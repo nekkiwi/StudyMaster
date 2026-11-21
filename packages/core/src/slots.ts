@@ -1,5 +1,16 @@
 import { addDays, eachDay, isWithin, weekKey, weekday, type ISODate } from "./dates.js";
-import type { DayPlan, Half, Settings, Slot, SlotId, StudyState } from "./types.js";
+import type { BusyTime, DayPlan, Half, Settings, Slot, SlotId, StudyState } from "./types.js";
+
+/** A session counts as taken when something else covers more than this many minutes of it. */
+export const BUSY_TOLERANCE_MINUTES = 30;
+
+/** Whether busy times (classes) cover a session's clock time. */
+export function slotTaken(busy: BusyTime[], settings: Settings, slot: SlotId): boolean {
+  const t = settings.slotTimes[slot];
+  let covered = 0;
+  for (const b of busy) covered += Math.max(0, Math.min(b.end, t.end) - Math.max(b.start, t.start));
+  return covered > BUSY_TOLERANCE_MINUTES;
+}
 
 export const SLOT_ORDER: readonly SlotId[] = ["am1", "am2", "pm1", "pm2"];
 
@@ -55,7 +66,8 @@ export function isBlocked(state: StudyState, date: ISODate): boolean {
  * Normal slots come from the weekly plan; free days and half-days have none.
  * Blocked days have no slots. Exam halves are removed. Extra slots (up to
  * max sessions per day, only on study days) are marked "extra". One
- * half-day per week becomes "buffer".
+ * half-day per week becomes "buffer". Sessions taken by busy times (classes
+ * from calendars) are left out.
  */
 export function buildSlotGrid(state: StudyState, from: ISODate, to: ISODate): Slot[] {
   const s = state.settings;
@@ -63,8 +75,16 @@ export function buildSlotGrid(state: StudyState, from: ISODate, to: ISODate): Sl
   const grid: Slot[] = [];
   if (to < from) return grid;
 
+  const busyByDate = new Map<ISODate, BusyTime[]>();
+  for (const b of state.busy ?? []) {
+    let list = busyByDate.get(b.date);
+    if (!list) busyByDate.set(b.date, (list = []));
+    list.push(b);
+  }
+
   for (const date of eachDay(from, to)) {
     if (isBlocked(state, date)) continue;
+    const busy = busyByDate.get(date) ?? [];
     const examHalves = new Set(
       state.subjects.filter((x) => x.examDate === date).map((x) => x.examHalf ?? "am"),
     );
@@ -74,6 +94,8 @@ export function buildSlotGrid(state: StudyState, from: ISODate, to: ISODate): Sl
     for (const slot of SLOT_ORDER) {
       if (!normal.includes(slot) && !extra.includes(slot)) continue;
       if (examHalves.has(halfOf(slot))) continue;
+      // Classes from the university calendar: the plan goes around them.
+      if (busy.length > 0 && slotTaken(busy, s, slot)) continue;
       grid.push({ date, slot, kind: normal.includes(slot) ? "normal" : "extra" });
     }
   }

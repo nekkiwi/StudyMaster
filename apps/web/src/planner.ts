@@ -9,6 +9,7 @@ import {
 } from "@studymaster/core";
 import { useEffect, useMemo, useState } from "react";
 import { todayISO } from "./lib/format";
+import { busyTimes } from "./lib/calendar";
 import { useStore, type AppData } from "./store";
 
 export interface Planner {
@@ -63,6 +64,7 @@ export function computePlanner(data: AppData, today: ISODate): Planner {
     blocked: data.blocked,
     settings: data.settings,
     ankiDue: currentDue(data.ankiDue, today),
+    busy: busyTimes(data.calendars ?? [], data.calendarEvents ?? {}),
   };
   const from = planStart(data, today);
   const full = planWithEscalation(state, from);
@@ -123,16 +125,18 @@ export function usePlanner(): Planner {
   const declinedKey = useStore((s) => s.declinedKey);
   const startDate = useStore((s) => s.startDate);
   const ankiDue = useStore((s) => s.ankiDue);
+  const calendars = useStore((s) => s.calendars);
+  const calendarEvents = useStore((s) => s.calendarEvents);
 
   return useMemo(
     () =>
       computePlanner(
         {
-          subjects, chunks, blocked, settings, checkIns, approval, declinedKey, startDate, ankiDue,
+          subjects, chunks, blocked, settings, checkIns, approval, declinedKey, startDate, ankiDue, calendars, calendarEvents,
           setupDone: true, checkInTime: "",
         },
         today,
       ),
-    [subjects, chunks, blocked, settings, checkIns, approval, declinedKey, startDate, ankiDue, today],
+    [subjects, chunks, blocked, settings, checkIns, approval, declinedKey, startDate, ankiDue, calendars, calendarEvents, today],
   );
 }
