@@ -128,7 +128,8 @@ scanned books it also tries `parseBlockToc` (chapters marked by the sub-entry
 line repeated in every chapter, page-number columns, OCR letter-spacing
 undone, glued labels like "LektionLektion…" → "Lektion N:"). Page counts are
 start-page differences; the last chapter ends at the highest number in its
-column. Everything stays on the device and goes through the review list.
+column. For signed-in users the AI reads the contents first (docs/AI.md);
+this quick reader is the fallback. Everything goes through the review list.
 
 ### Linking subjects and lectures to Anki decks
 - A subject can be **linked to an Anki deck** (`Subject.ankiDeck`, a

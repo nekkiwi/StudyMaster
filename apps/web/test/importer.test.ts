@@ -346,3 +346,31 @@ describe("chapters read by AI", () => {
   });
 });
 
+describe("AI first, quick reader as fallback", () => {
+  it("keeps the quick result to switch back and forth", async () => {
+    const { applyAiToc, swapReader } = await import("../src/lib/importer.js");
+    const quick = { id: "s", include: true, name: "Deutsch", examDate: TODAY, readBy: "quick" as const, tocText: "…",
+      chunks: [{ id: "q", include: true, title: "Ankommen", recordingMinutes: 0, pages: 13, slides: 0, sources: ["Buch.pdf (table of contents)"] }] };
+    const ai = applyAiToc(quick, { chapters: [{ title: "Lektion 1: Ankommen", startPage: 10, include: true }], lastPage: 22 }, "Buch.pdf");
+    expect(ai).toMatchObject({ readBy: "ai", chunks: [{ title: "Lektion 1: Ankommen", pages: 13 }] });
+    const back = swapReader(ai);
+    expect(back).toMatchObject({ readBy: "quick", chunks: [{ title: "Ankommen" }] });
+    expect(swapReader(back).chunks[0]!.title).toBe("Lektion 1: Ankommen");
+  });
+});
+
+describe("day colors", () => {
+  it("tints with plain rgba and splits diagonally for two subjects", async () => {
+    const { dayBackground, subjectColor, tint } = await import("../src/lib/colors.js");
+    expect(tint("#10b981", 30)).toBe("rgba(16, 185, 129, 0.30)");
+    expect(dayBackground(["#10b981"], 30)).toBe("linear-gradient(rgba(16, 185, 129, 0.30), rgba(16, 185, 129, 0.30))");
+    expect(dayBackground(["#8b5cf6", "#10b981"], 30)).toBe(
+      "linear-gradient(to bottom right, rgba(139, 92, 246, 0.30) 0.00% 50.00%, rgba(16, 185, 129, 0.30) 50.00% 100.00%)",
+    );
+    expect(dayBackground([], 30)).toBeUndefined();
+    // Subjects without a color still get a stable one.
+    expect(subjectColor({ id: "abc" })).toBe(subjectColor({ id: "abc" }));
+    expect(subjectColor({ id: "abc" })).toMatch(/^#/);
+  });
+});
+

@@ -5,14 +5,17 @@ import { todayISO } from "../lib/format";
 import { leaf } from "../lib/anki";
 import { useAccount } from "../account";
 import { readTocWithAi } from "../lib/aiImport";
-import { adoptEmptySubject, ankiTarget, applyAiToc, buildDraft, draftFromToc, mergeChunks, type Draft, type DraftChunk, type DraftSubject } from "../lib/importer";
+import { adoptEmptySubject, ankiTarget, applyAiToc, buildDraft, swapReader, draftFromToc, mergeChunks, type Draft, type DraftChunk, type DraftSubject } from "../lib/importer";
 import { useStore } from "../store";
 import { AnkiCollectionPicker } from "./ankiConnect";
 import { toast } from "./toast";
 import { Badge, Button, cx, Field, Modal, NameInput, NumberInput, Segmented, Select, TextArea, TextInput } from "./ui";
 
 type Mode = "files" | "toc" | "anki";
-type Stage = { kind: "choose" } | { kind: "reading"; done: number; total: number; name: string } | { kind: "review"; draft: Draft };
+type Stage =
+  | { kind: "choose" }
+  | { kind: "reading"; done: number; total: number; name: string; label?: string }
+  | { kind: "review"; draft: Draft };
 
 /**
  * Import material: files, folders or a pasted table of contents are turned
@@ -56,12 +59,40 @@ export function ImportDialog({
     onClose();
   };
 
+  /**
+   * The AI reads tables of contents by default (signed-in users): subjects
+   * whose chapters came from a printed contents page get the AI's chapters;
+   * the quick on-device result stays as a fallback and can be switched back.
+   */
+  const aiFirst = async (d: Draft): Promise<Draft> => {
+    const todo = d.subjects.filter((x) => x.tocText);
+    if (todo.length === 0 || useAccount.getState().status !== "signedIn") return d;
+    setStage({ kind: "reading", done: 0, total: 1, name: "", label: "AI is reading the table of contents…" });
+    let failed: string | undefined;
+    const read = await Promise.all(
+      d.subjects.map(async (x) => {
+        if (!x.tocText) return x;
+        try {
+          const source = x.chunks[0]?.sources[0]?.replace(/ \(.*\)$/, "") ?? "Table of contents";
+          const next = applyAiToc({ ...x, readBy: "quick" }, await readTocWithAi(x.tocText), source);
+          return next.chunks.length > 0 ? next : { ...x, readBy: "quick" as const };
+        } catch (e) {
+          failed = e instanceof Error ? e.message : "The AI couldn't answer.";
+          return { ...x, readBy: "quick" as const };
+        }
+      }),
+    );
+    if (failed) toast(`${failed} Showing the quick reader's result instead.`);
+    return { ...d, subjects: read };
+  };
+
   const read = async (picked: PickedFile[]) => {
     if (picked.length === 0) return;
     setStage({ kind: "reading", done: 0, total: picked.length, name: "" });
     const files = await readFiles(picked, (done, total, name) => setStage({ kind: "reading", done, total, name }));
     const chunks = useStore.getState().chunks;
-    setStage({ kind: "review", draft: toTarget(adoptEmptySubject(buildDraft(files, subjects, todayISO()), subjects, chunks)) });
+    const draft = await aiFirst(toTarget(adoptEmptySubject(buildDraft(files, subjects, todayISO()), subjects, chunks)));
+    setStage({ kind: "review", draft });
   };
 
   const draft = stage.kind === "review" ? stage.draft : undefined;
@@ -107,14 +138,12 @@ export function ImportDialog({
           initialMode={initialMode}
           defaultSubject={target?.name}
           onFiles={read}
-          onToc={(d) => setStage({ kind: "review", draft: toTarget(d) })}
+          onToc={async (d) => setStage({ kind: "review", draft: await aiFirst(toTarget(d)) })}
         />}
       {stage.kind === "reading" && (
         <div className="flex flex-col items-center gap-3 py-12 text-center">
           <Loader2 className="animate-spin text-indigo-600" size={28} />
-          <p className="font-medium">
-            Reading {Math.min(stage.done + 1, stage.total)} of {stage.total}…
-          </p>
+          <p className="font-medium">{stage.label ?? `Reading ${Math.min(stage.done + 1, stage.total)} of ${stage.total}…`}</p>
           <p className="max-w-full truncate text-sm text-slate-500">{stage.name}</p>
           <p className="text-xs text-slate-400">Files stay on your device.</p>
         </div>
@@ -279,13 +308,32 @@ function AiRead({ subject, onChange }: { subject: DraftSubject; onChange: (next:
       setBusy(false);
     }
   };
+  if (subject.readBy === "ai") {
+    return (
+      <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-violet-50/50 p-3 text-sm dark:border-slate-800 dark:bg-violet-500/5">
+        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-slate-600 dark:text-slate-400">
+          <Sparkles size={14} className="shrink-0 text-violet-600" /> Chapters read by AI from the table of contents.
+        </span>
+        {(subject.otherChunks?.length ?? 0) > 0 && (
+          <Button size="sm" variant="ghost" onClick={() => onChange(swapReader(subject))}>
+            Use the quick reader's result
+          </Button>
+        )}
+      </div>
+    );
+  }
   return (
     <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-violet-50/50 p-3 text-sm dark:border-slate-800 dark:bg-violet-500/5">
       <span className="min-w-0 flex-1 text-slate-600 dark:text-slate-400">
-        {empty ? "No chapters found in this table of contents." : "Chapters read from the table of contents."}{" "}
-        {signedIn ? "Not right? Let AI read it – only the contents text is sent." : "Not right? Sign in to let AI read it."}
+        {empty ? "No chapters found in this table of contents." : "Chapters read from the table of contents by the quick reader."}{" "}
+        {signedIn ? "Not right? Let AI read it – only the contents text is sent." : "Sign in to let AI read it – it's usually more accurate."}
       </span>
-      {signedIn && (
+      {subject.otherChunks && (
+        <Button size="sm" variant="ghost" onClick={() => onChange(swapReader(subject))}>
+          Use the AI's result
+        </Button>
+      )}
+      {signedIn && !subject.otherChunks && (
         <Button size="sm" variant="secondary" onClick={run} disabled={busy}>
           {busy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} {busy ? "Reading…" : "Let AI read the contents"}
         </Button>

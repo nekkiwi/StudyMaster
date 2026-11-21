@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import { ProposalBanner } from "../components/proposal";
 import { KIND_ICON, SessionCard } from "../components/session";
 import { Badge, Button, Card, cx, Modal, SectionTitle, SubjectDot } from "../components/ui";
-import { dayBackground } from "../lib/colors";
+import { dayBackground, subjectColor } from "../lib/colors";
 import { formatDay, formatMinutes, formatShort, SLOT_LABEL, weekdayShort } from "../lib/format";
 import { daySubjects } from "../lib/stats";
 import type { Planner } from "../planner";
@@ -93,8 +93,8 @@ function DayColumn({
   const past = date < planner.from;
   const total = sessions.reduce((a, s) => a + sessionMinutes(s), 0);
   // The day takes the colors of the subjects studied: one tint, or diagonal splits.
-  const colors = daySubjects(shown.plan, date).map((id) => subjects.get(id)?.color).filter((c): c is string => !!c);
-  const background = block ? undefined : dayBackground(colors, 22);
+  const colors = daySubjects(shown.plan, date).filter((id) => subjects.has(id)).map((id) => subjectColor(subjects.get(id)));
+  const background = block ? undefined : dayBackground(colors, 30);
 
   return (
     <button
@@ -141,7 +141,7 @@ function DayColumn({
               "rounded-lg border px-2 py-1.5",
               s.kind === "buffer" && "buffer-stripes border-amber-300/70",
               s.kind === "extra" && "border-rose-200 dark:border-rose-500/30",
-              s.kind === "normal" && "border-slate-200/70 bg-white/75 dark:border-slate-700/60 dark:bg-slate-900/60",
+              s.kind === "normal" && "border-white/60 bg-white/55 dark:border-slate-700/50 dark:bg-slate-900/45",
             )}
           >
             <p className="text-[10px] font-medium tracking-wide text-slate-400 uppercase">
@@ -218,7 +218,7 @@ function Overview({ planner, onPickWeek, weekStart }: { planner: Planner; onPick
             const inWeek = d >= weekStart && d <= addDays(weekStart, 6);
             const level = minutes === 0 ? 0 : Math.min(4, Math.ceil((minutes / max) * 4));
             // Subject colors of the day; busier days a little stronger.
-            const colors = daySubjects(shown.plan, d).map((id) => subjects.get(id)?.color).filter((c): c is string => !!c);
+            const colors = daySubjects(shown.plan, d).filter((id) => subjects.has(id)).map((id) => subjectColor(subjects.get(id)));
             const background = !exam && !blocked && minutes > 0 ? dayBackground(colors, 30 + level * 12) : undefined;
             return (
               <button
@@ -271,12 +271,12 @@ function Overview({ planner, onPickWeek, weekStart }: { planner: Planner; onPick
 
 function Legend({ subjects }: { subjects: Subject[] }) {
   const [a, b] = subjects;
-  const split = a && b ? dayBackground([a.color ?? "#6366f1", b.color ?? "#10b981"], 45) : undefined;
+  const split = a && b ? dayBackground([subjectColor(a), subjectColor(b)], 45) : undefined;
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
       {subjects.map((s) => (
         <span key={s.id} className="flex items-center gap-1.5">
-          <span className="h-3 w-3 rounded" style={{ backgroundImage: dayBackground([s.color ?? "#6366f1"], 45) }} /> {s.name}
+          <span className="h-3 w-3 rounded" style={{ backgroundImage: dayBackground([subjectColor(s)], 45) }} /> {s.name}
         </span>
       ))}
       {split && (

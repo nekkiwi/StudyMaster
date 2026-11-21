@@ -50,10 +50,14 @@
   custom connector → log in. Later: submit to Claude's connector directory
   for one-click setup.
 
-### Built: "Let AI read the contents" (import)
-When a table of contents is messy (scanned books), the import review offers
-**Let AI read the contents**. Only the text of the contents pages is sent –
-never the book – and only when the user presses the button.
+### Built: AI reads tables of contents (import)
+For signed-in users the **AI reads the table of contents by default** whenever
+chapters come from a printed contents page (PDFs without bookmarks, pasted
+contents): "AI is reading the table of contents…", then the review shows
+"Chapters read by AI" with **Use the quick reader's result** to switch back.
+Signed out, or if the AI fails, the quick on-device reader's result is used
+(with a button to try the AI). Only the text of the contents pages is sent –
+never the book.
 - `apps/web/src/lib/aiImport.ts` → `POST /api/toc` with the user's Firebase
   ID token → `apps/api` (the same Cloudflare Worker that serves the app)
   verifies the token (Google's public keys), limits 20 reads per user and

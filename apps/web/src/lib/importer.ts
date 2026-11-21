@@ -76,6 +76,10 @@ export interface DraftSubject {
   tocText?: string;
   /** Last page of the book, if the user entered it (pasted contents). */
   lastPage?: number;
+  /** Who read the table of contents: the AI or the quick on-device reader. */
+  readBy?: "ai" | "quick";
+  /** The other reader's chapters, to switch back in the review. */
+  otherChunks?: DraftChunk[];
 }
 
 export interface Draft {
@@ -616,6 +620,8 @@ export function chaptersFromAi(toc: AiToc, lastPage?: number): TocChapter[] {
 export function applyAiToc(subject: DraftSubject, toc: AiToc, source: string): DraftSubject {
   return {
     ...subject,
+    readBy: "ai",
+    otherChunks: subject.readBy === "ai" ? subject.otherChunks : subject.chunks,
     chunks: chaptersFromAi(toc, subject.lastPage).map((c) => ({
       id: draftId(),
       include: c.include,
@@ -627,4 +633,10 @@ export function applyAiToc(subject: DraftSubject, toc: AiToc, source: string): D
       ...(c.estimated ? { note: "pages estimated – please check" } : {}),
     })),
   };
+}
+
+/** Switches between the AI's and the quick reader's chapters. */
+export function swapReader(subject: DraftSubject): DraftSubject {
+  if (!subject.otherChunks) return subject;
+  return { ...subject, chunks: subject.otherChunks, otherChunks: subject.chunks, readBy: subject.readBy === "ai" ? "quick" : "ai" };
 }
