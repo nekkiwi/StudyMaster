@@ -8,7 +8,7 @@ import {
   type Subject,
   type Weight,
 } from "@studymaster/core";
-import { ArrowDown, ArrowUp, Layers, Link2, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Layers, Link2, ListTree, PenLine, Plus, Trash2, Upload } from "lucide-react";
 import { useState } from "react";
 import { deckForChunk } from "../lib/anki";
 import { parseBulk } from "../lib/bulk";
@@ -16,6 +16,7 @@ import { SUBJECT_COLORS } from "../lib/colors";
 import { formatMinutes, newId } from "../lib/format";
 import { useStore } from "../store";
 import { canTalkToAnki, createMissingDecks } from "./ankiConnect";
+import { ImportDialog } from "./importer";
 import { KIND_ICON, KIND_LABEL } from "./session";
 import { toast } from "./toast";
 import { STEP_META } from "./steps";
@@ -29,11 +30,11 @@ export const WEIGHT_LABEL: Record<Weight, string> = {
   1.5: "very hard",
 };
 
-export function SubjectFields({ subject, onChange }: { subject: Subject; onChange: (s: Subject) => void }) {
+export function SubjectFields({ subject, onChange, autoFocus }: { subject: Subject; onChange: (s: Subject) => void; autoFocus?: boolean }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <NameInput label="Subject name" value={subject.name} placeholder="e.g. Biology" onChange={(name) => onChange({ ...subject, name })} />
+        <NameInput label="Subject name" value={subject.name} placeholder="e.g. Biology" autoFocus={autoFocus} onChange={(name) => onChange({ ...subject, name })} />
         <Field label="Color" group>
           <div className="flex h-10 items-center gap-1.5">
             {SUBJECT_COLORS.map((c) => (
@@ -83,7 +84,7 @@ export function SubjectFields({ subject, onChange }: { subject: Subject; onChang
   );
 }
 
-export function ChunkList({ subject }: { subject: Subject }) {
+export function ChunkList({ subject, hideAdd }: { subject: Subject; hideAdd?: boolean }) {
   const allChunks = useStore((s) => s.chunks);
   const settings = useStore((s) => s.settings);
   const upsertChunk = useStore((s) => s.upsertChunk);
@@ -121,7 +122,7 @@ export function ChunkList({ subject }: { subject: Subject }) {
           />
         ))}
       </ul>
-      <AddChunks subject={subject} nextOrder={(chunks[chunks.length - 1]?.order ?? 0) + 1} />
+      {!hideAdd && <AddChunks subject={subject} nextOrder={(chunks[chunks.length - 1]?.order ?? 0) + 1} />}
     </div>
   );
 }
@@ -244,7 +245,7 @@ function deckForNew(subject: Subject, chunkIds: string[]) {
     .catch(() => toast("Couldn't create the sub-deck in Anki – is Anki open? You can create it later in the Anki deck section."));
 }
 
-function AddChunks({ subject, nextOrder }: { subject: Subject; nextOrder: number }) {
+export function AddChunks({ subject, nextOrder }: { subject: Subject; nextOrder: number }) {
   const addChunks = useStore((s) => s.addChunks);
   const defaultRecording = useStore((s) => s.settings.defaultRecordingMinutes);
   const [mode, setMode] = useState<"one" | "many">("one");
@@ -365,6 +366,71 @@ function AddChunks({ subject, nextOrder }: { subject: Subject; nextOrder: number
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+type AddWay = "files" | "toc" | "anki" | "hand";
+
+const ADD_WAYS: { way: AddWay; icon: typeof Upload; title: string; text: string }[] = [
+  { way: "files", icon: Upload, title: "Import files", text: "Slides, book PDFs, videos – chapters are found for you" },
+  { way: "toc", icon: ListTree, title: "Paste a table of contents", text: "Copy it from the book or the course page" },
+  { way: "anki", icon: Layers, title: "From your Anki deck", text: "Its sub-decks become the lectures" },
+  { way: "hand", icon: PenLine, title: "Add by hand", text: "Type lectures, chapters or slide decks" },
+];
+
+/** The subject's material: the list, plus clear ways to add more. */
+export function MaterialSection({ subject }: { subject: Subject }) {
+  const chunks = useStore((s) => s.chunks).filter((c) => c.subjectId === subject.id);
+  const [importing, setImporting] = useState<"files" | "toc" | "anki" | null>(null);
+  const [byHand, setByHand] = useState(false);
+  const nextOrder = Math.max(0, ...chunks.map((c) => c.order)) + 1;
+  const choose = (way: AddWay) => (way === "hand" ? setByHand(true) : setImporting(way));
+  const dialog = <ImportDialog open={!!importing} initialMode={importing ?? "files"} targetSubjectId={subject.id} onClose={() => setImporting(null)} />;
+
+  if (chunks.length === 0 && !byHand) {
+    return (
+      <div className="space-y-3">
+        <p className="text-sm text-slate-600 dark:text-slate-400">How do you want to add the material for {subject.name || "this subject"}?</p>
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {ADD_WAYS.map(({ way, icon: Icon, title, text }) => (
+            <button
+              key={way}
+              type="button"
+              onClick={() => choose(way)}
+              className="flex items-start gap-3 rounded-2xl border border-slate-200 p-4 text-left transition hover:border-indigo-300 hover:bg-indigo-50/40 dark:border-slate-700 dark:hover:bg-indigo-500/5"
+            >
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-300">
+                <Icon size={18} />
+              </span>
+              <span>
+                <span className="block font-semibold">{title}</span>
+                <span className="mt-0.5 block text-xs text-slate-500 dark:text-slate-400">{text}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+        {dialog}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-4">
+      <ChunkList subject={subject} hideAdd />
+      {byHand ? (
+        <AddChunks subject={subject} nextOrder={nextOrder} />
+      ) : (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="mr-1 text-sm text-slate-500">Add more:</span>
+          {ADD_WAYS.map(({ way, icon: Icon, title }) => (
+            <Button key={way} size="sm" variant="secondary" onClick={() => choose(way)}>
+              <Icon size={14} /> {way === "toc" ? "Table of contents" : way === "anki" ? "From Anki" : title}
+            </Button>
+          ))}
+        </div>
+      )}
+      {dialog}
     </div>
   );
 }

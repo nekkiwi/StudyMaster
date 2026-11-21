@@ -150,7 +150,7 @@ export function ImportDialog({
           <p className="text-xs text-slate-400">Files stay on your device.</p>
         </div>
       )}
-      {stage.kind === "review" && <Review draft={stage.draft} onChange={(d) => setStage({ kind: "review", draft: d })} />}
+      {stage.kind === "review" && <Review draft={stage.draft} targetId={target?.id} onChange={(d) => setStage({ kind: "review", draft: d })} />}
     </Modal>
   );
 }
@@ -344,7 +344,7 @@ function AiRead({ subject, onChange }: { subject: DraftSubject; onChange: (next:
   );
 }
 
-function Review({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => void }) {
+function Review({ draft, onChange, targetId }: { draft: Draft; onChange: (d: Draft) => void; targetId?: string }) {
   const existing = useStore((s) => s.subjects);
   const existingChunks = useStore((s) => s.chunks);
   const defaultRecording = useStore((s) => s.settings.defaultRecordingMinutes);
@@ -431,6 +431,24 @@ function Review({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => voi
         const on = subject.chunks.filter((c) => c.include).length;
         return (
           <section key={subject.id} className={cx("rounded-2xl border border-slate-200 dark:border-slate-800", !subject.include && "opacity-50")}>
+            {targetId && subject.existingId === targetId && draft.subjects.length === 1 ? (
+              // Opened from a subject: no need to pick a subject or an exam date again.
+              <header className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3 text-sm dark:border-slate-800">
+                <span className="min-w-0 flex-1 text-slate-600 dark:text-slate-400">
+                  Adding to <b className="text-slate-900 dark:text-white">{subject.name}</b>
+                </span>
+                {subject.chunks.length > 0 && (
+                  <span className="text-xs text-slate-500">
+                    {on}/{subject.chunks.length} selected
+                  </span>
+                )}
+                {subject.ankiDeck && (
+                  <span className="flex basis-full items-center gap-1.5 text-xs text-slate-500">
+                    <Layers size={13} /> Anki deck <span className="font-mono">{subject.ankiDeck}</span>
+                  </span>
+                )}
+              </header>
+            ) : (
             <header className="flex flex-wrap items-center gap-2 border-b border-slate-100 p-3 dark:border-slate-800">
               <input
                 type="checkbox"
@@ -472,6 +490,7 @@ function Review({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => voi
                 </span>
               )}
             </header>
+            )}
             {subject.tocText && <AiRead subject={subject} onChange={(next) => setSubject(subject.id, next)} />}
             {(subject.links?.length ?? 0) > 0 && (
               <div className="border-b border-slate-100 p-3 dark:border-slate-800">

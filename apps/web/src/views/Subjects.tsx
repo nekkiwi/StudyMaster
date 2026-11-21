@@ -1,10 +1,9 @@
 import { addDays, daysBetween, type Subject } from "@studymaster/core";
-import { BookMarked, Brain, Layers, Plus, Trash2, Upload } from "lucide-react";
+import { BookMarked, Brain, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import { AnkiSuggestions, SubjectAnkiLink } from "../components/ankiConnect";
-import { ImportDialog } from "../components/importer";
-import { ChunkList, SubjectFields, WEIGHT_LABEL } from "../components/subjectForm";
-import { Badge, Button, Card, EmptyState, Modal, SubjectDot } from "../components/ui";
+import { MaterialSection, SubjectFields, WEIGHT_LABEL } from "../components/subjectForm";
+import { Badge, Button, Card, EmptyState, Modal, Segmented, SubjectDot } from "../components/ui";
 import { nextColor } from "../lib/colors";
 import { formatMinutes, formatShort, newId, relativeDays } from "../lib/format";
 import { subjectProgress } from "../lib/stats";
@@ -13,23 +12,11 @@ import { useStore } from "../store";
 
 export function SubjectsView({ planner }: { planner: Planner }) {
   const subjects = useStore((s) => s.subjects);
-  const upsertSubject = useStore((s) => s.upsertSubject);
-  const [editing, setEditing] = useState<string | null>(null);
-  const [importing, setImporting] = useState(false);
+  const [editing, setEditing] = useState<{ id: string; tab: Tab } | null>(null);
+  const [creating, setCreating] = useState(false);
   const progress = subjectProgress(planner.state);
   const status = new Map(planner.shown.plan.subjects.map((s) => [s.subjectId, s]));
 
-  const add = () => {
-    const subject: Subject = {
-      id: newId(),
-      name: "New subject",
-      color: nextColor(subjects.map((s) => s.color)),
-      weight: 1,
-      examDate: addDays(planner.today, 28),
-    };
-    upsertSubject(subject);
-    setEditing(subject.id);
-  };
 
   return (
     <div className="space-y-6">
@@ -38,22 +25,16 @@ export function SubjectsView({ planner }: { planner: Planner }) {
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Subjects</h1>
           <p className="text-slate-500 dark:text-slate-400">Your exams and the material for each.</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="secondary" onClick={() => setImporting(true)}>
-            <Upload size={16} /> Import
-          </Button>
-          <Button onClick={add}>
-            <Plus size={16} /> Subject
-          </Button>
-        </div>
+        <Button onClick={() => setCreating(true)}>
+          <Plus size={16} /> Subject
+        </Button>
       </header>
-      <ImportDialog open={importing} onClose={() => setImporting(false)} />
       <AnkiSuggestions />
 
       {progress.length === 0 ? (
         <Card>
           <EmptyState icon={<BookMarked size={22} />} title="No subjects yet">
-            Add a subject with its exam date, then its lectures, chapters and slide decks – or import a folder of slides, PDFs and videos.
+            Add a subject with its exam date, then its lectures, chapters and slide decks – typed, imported from files, or from Anki.
           </EmptyState>
         </Card>
       ) : (
@@ -65,7 +46,7 @@ export function SubjectsView({ planner }: { planner: Planner }) {
               <button
                 key={p.subject.id}
                 type="button"
-                onClick={() => setEditing(p.subject.id)}
+                onClick={() => setEditing({ id: p.subject.id, tab: "details" })}
                 className="group relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-900"
               >
                 <span className="absolute inset-x-0 top-0 h-1" style={{ background: p.subject.color }} />
@@ -98,25 +79,86 @@ export function SubjectsView({ planner }: { planner: Planner }) {
         </div>
       )}
 
-      <SubjectEditor id={editing} onClose={() => setEditing(null)} />
+      <NewSubject
+        open={creating}
+        today={planner.today}
+        onClose={() => setCreating(false)}
+        onCreated={(id) => {
+          setCreating(false);
+          setEditing({ id, tab: "material" });
+        }}
+      />
+      <SubjectEditor id={editing?.id ?? null} initialTab={editing?.tab ?? "details"} onClose={() => setEditing(null)} />
     </div>
   );
 }
 
-function SubjectEditor({ id, onClose }: { id: string | null; onClose: () => void }) {
+type Tab = "details" | "material" | "anki";
+
+/** "+ Subject": name, exam and difficulty first – nothing is saved until "Create". */
+function NewSubject({ open, today, onClose, onCreated }: { open: boolean; today: string; onClose: () => void; onCreated: (id: string) => void }) {
+  const subjects = useStore((s) => s.subjects);
+  const upsertSubject = useStore((s) => s.upsertSubject);
+  const fresh = (): Subject => ({ id: newId(), name: "", color: nextColor(subjects.map((s) => s.color)), weight: 1, examDate: addDays(today, 28) });
+  const [draft, setDraft] = useState<Subject>(fresh);
+  const [wasOpen, setWasOpen] = useState(false);
+  if (open !== wasOpen) {
+    setWasOpen(open);
+    if (open) setDraft(fresh());
+  }
+  const create = () => {
+    if (!draft.name.trim()) return;
+    upsertSubject({ ...draft, name: draft.name.trim() });
+    onCreated(draft.id);
+  };
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="New subject"
+      wide
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button onClick={create} disabled={!draft.name.trim()}>
+            Create and add material
+          </Button>
+        </>
+      }
+    >
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          create();
+        }}
+      >
+        <SubjectFields subject={draft} onChange={setDraft} autoFocus />
+      </form>
+    </Modal>
+  );
+}
+
+/** Editing a subject: details, material and Anki deck on separate tabs. */
+function SubjectEditor({ id, initialTab, onClose }: { id: string | null; initialTab: Tab; onClose: () => void }) {
   const subject = useStore((s) => s.subjects.find((x) => x.id === id));
+  const items = useStore((s) => s.chunks.filter((c) => c.subjectId === id).length);
   const upsertSubject = useStore((s) => s.upsertSubject);
   const removeSubject = useStore((s) => s.removeSubject);
   const [confirm, setConfirm] = useState(false);
-  const [importing, setImporting] = useState(false);
+  const [tab, setTab] = useState<Tab>(initialTab);
+  const [openedFor, setOpenedFor] = useState<string | null>(null);
+  if (id !== openedFor) {
+    setOpenedFor(id);
+    setTab(initialTab);
+    setConfirm(false);
+  }
 
   return (
     <Modal
       open={!!subject}
-      onClose={() => {
-        setConfirm(false);
-        onClose();
-      }}
+      onClose={onClose}
       title={subject?.name || "Subject"}
       wide
       footer={
@@ -126,7 +168,6 @@ function SubjectEditor({ id, onClose }: { id: string | null; onClose: () => void
               variant="danger"
               onClick={() => {
                 removeSubject(subject!.id);
-                setConfirm(false);
                 onClose();
               }}
             >
@@ -142,27 +183,26 @@ function SubjectEditor({ id, onClose }: { id: string | null; onClose: () => void
       }
     >
       {subject && (
-        <div className="space-y-6">
-          <SubjectFields subject={subject} onChange={upsertSubject} />
-          <div>
-            <div className="mb-2 flex items-center justify-between gap-2">
-              <h3 className="font-semibold">Material</h3>
-              <Button variant="secondary" size="sm" onClick={() => setImporting(true)}>
-                <Upload size={14} /> Import slides, PDFs or videos
-              </Button>
+        <div className="space-y-5">
+          <Segmented
+            value={tab}
+            onChange={setTab}
+            options={[
+              { value: "details", label: "Details" },
+              { value: "material", label: `Material${items ? ` (${items})` : ""}` },
+              { value: "anki", label: "Anki deck" },
+            ]}
+          />
+          {tab === "details" && <SubjectFields subject={subject} onChange={upsertSubject} />}
+          {tab === "material" && <MaterialSection subject={subject} />}
+          {tab === "anki" && (
+            <div className="space-y-3">
+              <p className="text-sm text-slate-500 dark:text-slate-400">
+                Choose this subject's deck in Anki. Its sub-decks are matched to your lectures and chapters by name, so ▶ Anki opens exactly the right one.
+              </p>
+              <SubjectAnkiLink subject={subject} />
             </div>
-            <ChunkList subject={subject} />
-            <ImportDialog open={importing} targetSubjectId={subject.id} onClose={() => setImporting(false)} />
-          </div>
-          <div>
-            <h3 className="mb-1 flex items-center gap-2 font-semibold">
-              <Layers size={16} className="text-sky-600" /> Anki deck
-            </h3>
-            <p className="mb-3 text-sm text-slate-500 dark:text-slate-400">
-              Choose this subject's deck in Anki. Its sub-decks are matched to your lectures and chapters by name, so ▶ Anki opens exactly the right one.
-            </p>
-            <SubjectAnkiLink subject={subject} />
-          </div>
+          )}
         </div>
       )}
     </Modal>

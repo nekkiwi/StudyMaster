@@ -97,11 +97,13 @@ export function NameInput({
   onChange,
   label = "Name",
   placeholder,
+  autoFocus,
 }: {
   value: string;
   onChange: (value: string) => void;
   label?: string;
   placeholder?: string;
+  autoFocus?: boolean;
 }) {
   return (
     <label className="block">
@@ -110,6 +112,7 @@ export function NameInput({
         <input
           value={value}
           placeholder={placeholder}
+          autoFocus={autoFocus}
           aria-label={label}
           onChange={(e) => onChange(e.target.value)}
           className={cx(INPUT_BASE, "w-full py-2.5 pr-10 text-base font-semibold")}

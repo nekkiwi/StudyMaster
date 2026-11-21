@@ -342,9 +342,13 @@ Code: `apps/web/src/planner.ts`.
   subject = light tint of its color, two = split diagonally, more = diagonal
   stripes (overview: stronger on busier days). Buffer = striped amber, extra
   = rose border, day off = grey, exam = full subject color.
-- **Subjects:** cards with progress, items done, cards made / estimated; the
-  subject editor has its own **Import** (files, table of contents, Anki) that
-  adds to that subject; editor
+- **Subjects:** cards with progress, items done, cards made / estimated.
+  Only one button: **+ Subject** → a short form (name, exam date/time,
+  difficulty, color; nothing is saved until "Create and add material") → the
+  subject editor opens on **Material** with four choices: Import files ·
+  Paste a table of contents · From your Anki deck · Add by hand. Imports
+  started there skip the subject/exam fields ("Adding to Biology"). The
+  editor has tabs **Details · Material · Anki deck**; editor
   with category icon per item, step toggles, real card count, reorder, the
   linked (blue) or default Anki deck name, and an "Anki deck" section to link
   the subject and its items.
