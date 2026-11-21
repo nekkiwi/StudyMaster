@@ -9,7 +9,9 @@ export interface CalendarSource {
   id: string;
   name: string;
   /** Where the events come from. */
-  kind: "link" | "file" | "timetable";
+  kind: "link" | "file" | "timetable" | "google";
+  /** Google Calendar: the calendar's id (connected via Google sign-in). */
+  googleId?: string;
   /** ICS link (Google "secret address", Outlook "publish", iCloud, university portal). */
   url?: string;
   /** University calendar (classes) – shown as such; blocks study time by default. */
@@ -41,7 +43,7 @@ const localDate = (d: Date): ISODate => `${d.getFullYear()}-${pad(d.getMonth() +
 const localMinutes = (d: Date) => d.getHours() * 60 + d.getMinutes();
 
 /** Splits an event that runs past midnight into one entry per day (all-day events are skipped). */
-function toDays(title: string, start: Date, end: Date, from: ISODate, to: ISODate): CalEvent[] {
+export function toDays(title: string, start: Date, end: Date, from: ISODate, to: ISODate): CalEvent[] {
   const out: CalEvent[] = [];
   let day = localDate(start);
   const last = localDate(end);
@@ -144,4 +146,27 @@ export function busyTimes(sources: CalendarSource[], events: Record<string, CalE
 export function calendarRange(today: ISODate, lastExam: ISODate | undefined): { from: ISODate; to: ISODate } {
   const to = lastExam && lastExam > today ? addDays(lastExam, 14) : addDays(today, 120);
   return { from: addDays(today, -7), to };
+}
+
+/** An event as the Google Calendar API returns it (the parts we use). */
+export interface GoogleEvent {
+  summary?: string;
+  status?: string;
+  transparency?: string;
+  start?: { dateTime?: string; date?: string };
+  end?: { dateTime?: string; date?: string };
+}
+
+/**
+ * Google Calendar events → busy times. All-day events, cancelled events and
+ * events marked "free" (transparent) are skipped. Times are shown locally.
+ */
+export function googleToEvents(items: GoogleEvent[], from: ISODate, to: ISODate): CalEvent[] {
+  const out: CalEvent[] = [];
+  for (const e of items) {
+    if (e.status === "cancelled" || e.transparency === "transparent") continue;
+    if (!e.start?.dateTime || !e.end?.dateTime) continue;
+    out.push(...toDays(e.summary || "Busy", new Date(e.start.dateTime), new Date(e.end.dateTime), from, to));
+  }
+  return out.sort((a, b) => a.date.localeCompare(b.date) || a.start - b.start);
 }

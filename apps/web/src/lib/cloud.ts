@@ -103,6 +103,45 @@ export async function sendReset(email: string): Promise<void> {
   await authMod.sendPasswordResetEmail(auth, email.trim());
 }
 
+const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.readonly";
+let calendarToken: { token: string; until: number } | undefined;
+
+/** A Google Calendar access token from this session, if still valid (they last about an hour). */
+export function googleCalendarToken(): string | undefined {
+  return calendarToken && calendarToken.until > Date.now() ? calendarToken.token : undefined;
+}
+
+/**
+ * Asks Google for read-only calendar access (popup). Signed in with Google:
+ * re-confirms that account with the calendar permission; signed in with
+ * email: links a Google account. Returns an access token (about 1 hour).
+ */
+export async function connectGoogleCalendar(): Promise<string> {
+  const { auth, authMod } = await loadCloud();
+  const user = auth.currentUser;
+  if (!user) throw new Error("Please sign in first.");
+  const provider = new authMod.GoogleAuthProvider();
+  provider.addScope(CALENDAR_SCOPE);
+  const google = user.providerData.find((p) => p.providerId === "google.com");
+  provider.setCustomParameters({ prompt: "consent", ...(google?.email ? { login_hint: google.email } : {}) });
+  let result;
+  try {
+    result = google ? await authMod.reauthenticateWithPopup(user, provider) : await authMod.linkWithPopup(user, provider);
+  } catch (e) {
+    const code = errorCode(e);
+    if (code === "auth/credential-already-in-use") {
+      throw new Error("That Google account belongs to another StudyMaster account. Sign in with it, or use a calendar link instead.");
+    }
+    if (code === "auth/user-mismatch") throw new Error("Please pick the Google account you signed in with.");
+    if (code === "auth/popup-closed-by-user" || code === "auth/cancelled-popup-request") throw new Error("Google sign-in was closed.");
+    throw new Error(errorMessage(e));
+  }
+  const token = authMod.GoogleAuthProvider.credentialFromResult(result)?.accessToken;
+  if (!token) throw new Error("Google didn't give calendar access.");
+  calendarToken = { token, until: Date.now() + 55 * 60_000 };
+  return token;
+}
+
 /** A fresh Firebase ID token for our own API, or null when signed out. */
 export async function idToken(): Promise<string | null> {
   const { auth } = await loadCloud();

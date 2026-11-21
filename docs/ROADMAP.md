@@ -28,7 +28,9 @@
   step, exam review scaled with material, four-sessions preset.
 - ✅ Calendar integration: university calendars (ICS links, .ics files,
   timetable PDFs/photos via AI) block study sessions; week view shows classes.
-- ⏳ "Sign in with Google / Microsoft" to pick calendars directly (OAuth).
+- ✅ Google Calendar sign-in: pick calendars directly (needs Calendar API +
+  scope + test users in Google Cloud, see HOSTING.md).
+- ⏳ Microsoft/Outlook sign-in; Google app verification for all users.
 - ⏳ Android: start *studying* the exact deck. Options: propose a
   `anki://x-callback-url/study?deck=` deep link to AnkiDroid (like AnkiMobile),
   or ship StudyMaster as an Android app that sends AnkiDroid's review intent

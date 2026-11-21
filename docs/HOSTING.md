@@ -158,6 +158,20 @@ and survive deploys:
 Never export anything but the default handler from `apps/api/src/index.ts`
 (Cloudflare treats named exports of the main module as entry points).
 
+### Google Calendar sign-in (one-time setup in Google Cloud)
+"Connect Google Calendar" uses the Firebase Google provider with the scope
+`https://www.googleapis.com/auth/calendar.readonly` and calls the Calendar API
+from the browser. In the Google Cloud console of the Firebase project
+(`studymaster-caa36`):
+1. APIs & Services → Library → **Google Calendar API** → Enable.
+2. Google Auth Platform (OAuth consent screen) → **Data access** → Add scope
+   `…/auth/calendar.readonly`.
+3. **Audience**: while the app is in "Testing", add every Google account that
+   should use it as a test user (max. 100). For everyone: publish the app;
+   until Google verifies it (privacy policy, own domain, review), users see an
+   "unverified app" warning they can click through.
+Calendar links (ICS) work for everyone without this.
+
 ### Manual deploy (fallback, from your own computer)
 ```bash
 npx wrangler@4 login

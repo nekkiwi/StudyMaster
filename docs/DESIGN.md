@@ -155,6 +155,12 @@ the exam; main study must be done before the first one.
 Classes block study time: Settings → Calendars & timetable (also in the
 onboarding week step). Each calendar is a university calendar or not, and
 "Plan around these events" (default on); any number can be added.
+- **Google Calendar** (first tab): "Connect Google Calendar" → Google popup
+  (read-only calendar access via the Firebase Google provider; email
+  accounts get Google linked) → pick calendars, mark university ones (names
+  like "Uni", "Vorlesung", "Timetable" are pre-ticked). Events come from the
+  Calendar API (`singleEvents`, all-day / cancelled / "free" events skipped).
+  The browser token lasts ~1 h, so updating later is one tap (↻).
 - **Calendar link (ICS)** with step-by-step help for Google Calendar (secret
   iCal address), Outlook/Microsoft 365 (publish calendar), Apple iCloud
   (public calendar, webcal://) and university portals. Fetched by the
@@ -171,8 +177,7 @@ onboarding week step). Each calendar is a university calendar or not, and
   by a blocking event is left out, so the plan goes around classes (and asks
   for extra sessions if it doesn't fit). Classes show in grey in the week view.
 - Events of the planning period are stored with the plan and synced.
-- Later: "Sign in with Google/Microsoft" to pick calendars directly (needs
-  OAuth app verification).
+- Later: Microsoft/Outlook sign-in; Google app verification for everyone.
 
 ### Books without bookmarks
 A PDF book without bookmarks is read through its printed table of contents

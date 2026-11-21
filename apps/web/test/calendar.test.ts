@@ -85,3 +85,53 @@ describe("timetables read by AI", () => {
     expect(busy).toEqual([ev]);
   });
 });
+
+describe("Google Calendar", () => {
+  it("turns events into busy times, skipping all-day, cancelled and 'free' events", async () => {
+    const { googleToEvents } = await import("../src/lib/calendar.js");
+    const local = (iso: string) => {
+      const d = new Date(iso);
+      return d.getHours() * 60 + d.getMinutes();
+    };
+    const events = googleToEvents(
+      [
+        { summary: "Anatomy", start: { dateTime: "2026-11-23T10:15:00+01:00" }, end: { dateTime: "2026-11-23T11:45:00+01:00" } },
+        { summary: "Holiday", start: { date: "2026-11-24" }, end: { date: "2026-11-25" } },
+        { summary: "Cancelled", status: "cancelled", start: { dateTime: "2026-11-25T10:00:00Z" }, end: { dateTime: "2026-11-25T11:00:00Z" } },
+        { summary: "Free time", transparency: "transparent", start: { dateTime: "2026-11-26T10:00:00Z" }, end: { dateTime: "2026-11-26T11:00:00Z" } },
+      ],
+      "2026-11-20",
+      "2026-11-30",
+    );
+    expect(events.map((e) => e.title)).toEqual(["Anatomy"]);
+    expect(events[0]!.start).toBe(local("2026-11-23T10:15:00+01:00"));
+  });
+
+  it("lists calendars and pages through events", async () => {
+    const { listGoogleCalendars, googleEvents } = await import("../src/lib/googleCalendar.js");
+    const calls: string[] = [];
+    const fake = async (url: string) => {
+      calls.push(url);
+      if (url.includes("calendarList")) {
+        return new Response(JSON.stringify({ items: [{ id: "b", summary: "Uni" }, { id: "a", summary: "Me", primary: true }] }));
+      }
+      const page2 = url.includes("pageToken=p2");
+      return new Response(
+        JSON.stringify({
+          items: [{ summary: page2 ? "Lab" : "Lecture", start: { dateTime: "2026-11-23T10:00:00Z" }, end: { dateTime: "2026-11-23T11:00:00Z" } }],
+          ...(page2 ? {} : { nextPageToken: "p2" }),
+        }),
+      );
+    };
+    const original = globalThis.fetch;
+    globalThis.fetch = fake as typeof fetch;
+    try {
+      expect((await listGoogleCalendars("t")).map((c) => c.summary)).toEqual(["Me", "Uni"]);
+      const events = await googleEvents("t", "uni@group.calendar.google.com", "2026-11-20", "2026-11-30");
+      expect(events.map((e) => e.title).sort()).toEqual(["Lab", "Lecture"]);
+      expect(calls.some((c) => c.includes("singleEvents=true"))).toBe(true);
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+});

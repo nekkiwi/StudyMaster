@@ -17,6 +17,8 @@ import {
   type WeeklyClass,
 } from "../lib/calendar";
 import { fetchCalendarLink, readTimetableFile, type AiTimetable } from "../lib/calendarApi";
+import { connectGoogleCalendar, googleCalendarToken } from "../lib/cloud";
+import { googleEvents, listGoogleCalendars, type GoogleCalendar } from "../lib/googleCalendar";
 import { formatShort, newId, todayISO } from "../lib/format";
 import { useStore } from "../store";
 import { toast } from "./toast";
@@ -34,9 +36,21 @@ function useRange() {
   return calendarRange(todayISO(), last);
 }
 
-/** Reads a calendar's events again (links from the internet, timetables repeated for the current period). */
-export async function refreshCalendar(source: CalendarSource, range: { from: string; to: string }): Promise<CalEvent[] | undefined> {
+/**
+ * Reads a calendar's events again (links from the internet, Google via its
+ * API, timetables repeated for the current period). Google needs a token:
+ * `interactive` may open the Google popup (only from a tap).
+ */
+export async function refreshCalendar(
+  source: CalendarSource,
+  range: { from: string; to: string },
+  interactive = false,
+): Promise<CalEvent[] | undefined> {
   if (source.kind === "link" && source.url) return parseIcs(await fetchCalendarLink(source.url), range.from, range.to);
+  if (source.kind === "google" && source.googleId) {
+    const token = googleCalendarToken() ?? (interactive ? await connectGoogleCalendar() : undefined);
+    return token ? googleEvents(token, source.googleId, range.from, range.to) : undefined;
+  }
   if (source.kind === "timetable" && source.classes) {
     const from = source.classesFrom && source.classesFrom > range.from ? source.classesFrom : range.from;
     const to = source.classesUntil && source.classesUntil < range.to ? source.classesUntil : range.to;
@@ -87,7 +101,7 @@ export function CalendarSection({ compact }: { compact?: boolean }) {
   const refresh = async (c: CalendarSource) => {
     setBusy(c.id);
     try {
-      const ev = await refreshCalendar(c, range);
+      const ev = await refreshCalendar(c, range, true);
       if (ev) save({ ...c, updatedAt: new Date().toISOString() }, ev);
       toast(`Updated “${c.name}”.`, { tone: "success" });
     } catch (e) {
@@ -115,7 +129,7 @@ export function CalendarSection({ compact }: { compact?: boolean }) {
                   {c.university ? <GraduationCap size={16} className="text-indigo-600" /> : <CalendarDays size={16} className="text-slate-500" />}
                   <span className="min-w-0 flex-1 truncate font-medium">{c.name}</span>
                   {c.university && <Badge tone="indigo">University</Badge>}
-                  <Badge>{c.kind === "link" ? "Link" : c.kind === "file" ? "File" : "Timetable"}</Badge>
+                  <Badge>{c.kind === "link" ? "Link" : c.kind === "file" ? "File" : c.kind === "google" ? "Google" : "Timetable"}</Badge>
                 </div>
                 <p className="mt-1 text-xs text-slate-500">
                   {list.length} event{list.length === 1 ? "" : "s"} in your planning period
@@ -186,7 +200,10 @@ export function SessionTimes() {
   );
 }
 
-type Way = "link" | "file" | "timetable";
+type Way = "google" | "link" | "file" | "timetable";
+
+/** Calendar names that sound like classes – pre-marked as university calendars. */
+const UNI_NAME = /uni|vorlesung|stundenplan|timetable|lecture|class|kurs|semester|campus|studium|course|seminar/i;
 
 const PROVIDERS: { id: string; name: string; steps: string[] }[] = [
   {
@@ -230,7 +247,8 @@ const PROVIDERS: { id: string; name: string; steps: string[] }[] = [
 function AddCalendar({ open, onClose, range }: { open: boolean; onClose: () => void; range: { from: string; to: string } }) {
   const signedIn = useAccount((s) => s.status === "signedIn");
   const save = useStore((s) => s.saveCalendar);
-  const [way, setWay] = useState<Way>("link");
+  const [way, setWay] = useState<Way>("google");
+  const [google, setGoogle] = useState<{ token: string; calendars: (GoogleCalendar & { pick: boolean; uni: boolean })[] } | null>(null);
   const [provider, setProvider] = useState("google");
   const [url, setUrl] = useState("");
   const [name, setName] = useState("");
@@ -241,6 +259,7 @@ function AddCalendar({ open, onClose, range }: { open: boolean; onClose: () => v
   const timetableInput = useRef<HTMLInputElement>(null);
 
   const reset = () => {
+    setGoogle(null);
     setUrl("");
     setName("");
     setTimetable(null);
@@ -263,6 +282,41 @@ function AddCalendar({ open, onClose, range }: { open: boolean; onClose: () => v
     block: true,
     updatedAt: new Date().toISOString(),
   });
+
+  const connectGoogle = async () => {
+    setBusy(true);
+    try {
+      const token = await connectGoogleCalendar();
+      const list = await listGoogleCalendars(token);
+      const existing = new Set((useStore.getState().calendars ?? []).map((c) => c.googleId).filter(Boolean));
+      setGoogle({
+        token,
+        calendars: list.filter((c) => !existing.has(c.id)).map((c) => ({ ...c, pick: UNI_NAME.test(c.summary), uni: UNI_NAME.test(c.summary) })),
+      });
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't connect Google Calendar.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  const addGoogle = async () => {
+    if (!google) return;
+    setBusy(true);
+    try {
+      let count = 0;
+      const picked = google.calendars.filter((c) => c.pick);
+      for (const c of picked) {
+        const events = await googleEvents(google.token, c.id, range.from, range.to);
+        save({ id: newId(), name: c.summary, kind: "google", googleId: c.id, university: c.uni, block: true, updatedAt: new Date().toISOString() }, events);
+        count += events.length;
+      }
+      toast(`Added ${picked.length} Google calendar${picked.length === 1 ? "" : "s"} – ${count} events. The plan now goes around them.`, { tone: "success" });
+      close();
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "Couldn't read the calendars.");
+      setBusy(false);
+    }
+  };
 
   const addLink = async () => {
     setBusy(true);
@@ -324,6 +378,12 @@ function AddCalendar({ open, onClose, range }: { open: boolean; onClose: () => v
           <Button variant="ghost" onClick={close}>
             Cancel
           </Button>
+          {way === "google" && google && (
+            <Button onClick={addGoogle} disabled={busy || !google.calendars.some((c) => c.pick)}>
+              {busy ? <Loader2 size={16} className="animate-spin" /> : <Plus size={16} />} Add {google.calendars.filter((c) => c.pick).length} calendar
+              {google.calendars.filter((c) => c.pick).length === 1 ? "" : "s"}
+            </Button>
+          )}
           {way === "link" && (
             <Button onClick={addLink} disabled={busy || !url.trim() || needsSignIn}>
               {busy ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />} Add calendar
@@ -345,11 +405,13 @@ function AddCalendar({ open, onClose, range }: { open: boolean; onClose: () => v
             setTimetable(null);
           }}
           options={[
-            { value: "link", label: "Calendar link" },
+            { value: "google", label: "Google" },
+            { value: "link", label: "Link" },
             { value: "file", label: ".ics file" },
-            { value: "timetable", label: "PDF or photo" },
+            { value: "timetable", label: "PDF / photo" },
           ]}
         />
+        {way !== "google" && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <Field label="Name">
             <TextInput value={name} placeholder={university ? "e.g. Uni timetable" : "e.g. Work"} onChange={(e) => setName(e.target.value)} />
@@ -358,10 +420,54 @@ function AddCalendar({ open, onClose, range }: { open: boolean; onClose: () => v
             <Toggle checked={university} onChange={setUniversity} label="This is a university calendar" />
           </div>
         </div>
+        )}
 
+        {way === "google" && !google && (
+          <div className="space-y-3 text-sm text-slate-600 dark:text-slate-400">
+            <p>Sign in with Google and pick your calendars directly – StudyMaster only reads them (it never changes anything).</p>
+            <Button onClick={connectGoogle} disabled={busy || !signedIn}>
+              {busy ? <Loader2 size={16} className="animate-spin" /> : <CalendarDays size={16} />} Connect Google Calendar
+            </Button>
+          </div>
+        )}
+        {way === "google" && google && (
+          <div className="space-y-2">
+            <p className="text-sm text-slate-600 dark:text-slate-400">Pick the calendars to plan around, and mark the university ones.</p>
+            {google.calendars.length === 0 && <p className="text-sm text-slate-500">All your Google calendars are already added.</p>}
+            <ul className="divide-y divide-slate-100 rounded-2xl border border-slate-200 dark:divide-slate-800 dark:border-slate-800">
+              {google.calendars.map((c) => (
+                <li key={c.id} className="flex flex-wrap items-center gap-3 p-2.5 text-sm">
+                  <label className="flex min-w-0 flex-1 items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={c.pick}
+                      onChange={(e) => setGoogle({ ...google, calendars: google.calendars.map((x) => (x.id === c.id ? { ...x, pick: e.target.checked } : x)) })}
+                      className="h-4 w-4 accent-indigo-600"
+                    />
+                    <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: c.backgroundColor ?? "#94a3b8" }} />
+                    <span className="truncate">{c.summary}</span>
+                    {c.primary && <Badge>main</Badge>}
+                  </label>
+                  {c.pick && (
+                    <label className="flex shrink-0 items-center gap-1.5 text-xs text-slate-500">
+                      <input
+                        type="checkbox"
+                        checked={c.uni}
+                        onChange={(e) => setGoogle({ ...google, calendars: google.calendars.map((x) => (x.id === c.id ? { ...x, uni: e.target.checked } : x)) })}
+                        className="h-3.5 w-3.5 accent-indigo-600"
+                      />
+                      University
+                    </label>
+                  )}
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-slate-500">Google gives access for about an hour; to update later, press ↻ next to the calendar.</p>
+          </div>
+        )}
         {needsSignIn && (
           <p className="rounded-2xl bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
-            Sign in to use {way === "link" ? "calendar links" : "AI for timetables"} – or use the “.ics file” tab.
+            Sign in to use {way === "google" ? "Google Calendar" : way === "link" ? "calendar links" : "AI for timetables"} – or use the “.ics file” tab.
           </p>
         )}
 
