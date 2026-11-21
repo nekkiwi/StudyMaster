@@ -268,3 +268,52 @@ describe("real-world books", () => {
     expect(adoptEmptySubject(draft, existing, []).subjects[0]!.existingId).toBeUndefined();
   });
 });
+
+describe("scanned tables of contents", () => {
+  it("reads chapters from a column layout with letter-spaced titles (German textbook)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { parseToc } = await import("../src/lib/importer.js");
+    const text = readFileSync(new URL("./fixtures/toc-arbeitsbuch.txt", import.meta.url), "utf8");
+    const chapters = parseToc(text);
+    expect(chapters.map((c) => c.title)).toEqual([
+      "Lektion 1: Ankommen",
+      "Lektion 2: Zu Hause",
+      "Lektion 3: Essen und Trinken",
+      "Lektion 4: Arbeitswelt",
+      "Lektion 5: Sport und Fitness",
+      "Lektion 6: Schule und Ausbildung",
+      "Lektion 7: Feste und Geschenke",
+    ]);
+    // Start pages 10, 23, 36, 47, 59, 72, 84; the last one ends at 95.
+    expect(chapters.map((c) => c.pages)).toEqual([13, 13, 11, 12, 13, 12, 12]);
+    expect(chapters.every((c) => c.include && !c.estimated)).toBe(true);
+  });
+
+  it("joins letter-spaced words, leaves normal titles alone", async () => {
+    const { unspace } = await import("../src/lib/importer.js");
+    expect(unspace("E s s e n u n d T rin k e n")).toBe("Essen und Trinken");
+    expect(unspace("Zu H a u se")).toBe("Zu Hause");
+    expect(unspace("A r b e it s w e lt")).toBe("Arbeitswelt");
+    expect(unspace("Cell biology and genetics")).toBe("Cell biology and genetics");
+  });
+
+  it("uses the printed table of contents of a PDF without bookmarks", async () => {
+    const { readFileSync } = await import("node:fs");
+    const { buildDraft } = await import("../src/lib/importer.js");
+    const toc = readFileSync(new URL("./fixtures/toc-arbeitsbuch.txt", import.meta.url), "utf8");
+    const draft = buildDraft([{ path: "Deutsch/Arbeitsbuch.pdf", kind: "pdf", pages: 180, landscape: false, outline: [], tocPages: [toc] }], [], TODAY);
+    expect(draft.subjects[0]!.chunks.map((c) => c.title)[0]).toBe("Lektion 1: Ankommen");
+    expect(draft.subjects[0]!.chunks).toHaveLength(7);
+  });
+
+  it("still reads normal 'Title ..... 12' tables of contents line by line", async () => {
+    const { parseToc } = await import("../src/lib/importer.js");
+    const chapters = parseToc("1 Cells ..... 1\n2 Genetics ..... 21\n3 Ecology ..... 40", 60);
+    expect(chapters.map((c) => [c.title, c.pages])).toEqual([
+      ["1 Cells", 20],
+      ["2 Genetics", 19],
+      ["3 Ecology", 21],
+    ]);
+  });
+});
+

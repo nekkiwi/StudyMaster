@@ -120,6 +120,16 @@ The real workflow: A) watch → read → write cards, then B) study Anki.
   (≥ 15 min), so reviews never pause. Only once cards exist. Free days in the
   weekly plan stay free.
 
+### Books without bookmarks
+A PDF book without bookmarks is read through its printed table of contents
+(pages near the start with an "Inhalt/Contents" heading, plus following
+pages full of page numbers). `parseToc` reads "Title …… 12" lines; for
+scanned books it also tries `parseBlockToc` (chapters marked by the sub-entry
+line repeated in every chapter, page-number columns, OCR letter-spacing
+undone, glued labels like "LektionLektion…" → "Lektion N:"). Page counts are
+start-page differences; the last chapter ends at the highest number in its
+column. Everything stays on the device and goes through the review list.
+
 ### Linking subjects and lectures to Anki decks
 - A subject can be **linked to an Anki deck** (`Subject.ankiDeck`, a
   top-level deck = "collection", e.g. `Bio WS26`), and each lecture/chapter

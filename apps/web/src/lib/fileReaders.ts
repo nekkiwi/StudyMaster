@@ -56,7 +56,36 @@ interface RawOutlineItem {
   items: RawOutlineItem[];
 }
 
-async function readPdf(file: File): Promise<Pick<DetectedFile, "pages" | "landscape" | "outline">> {
+/** Headings of a table of contents page, in a few languages. */
+const TOC_HEADING = /\b(inhalt|inhaltsverzeichnis|contents|table of contents|sommaire|table des matières|índice|indice|sommario|inhoud)\b/i;
+
+/** Text of one page, one line per text line. */
+async function pageText(doc: { getPage(n: number): Promise<{ getTextContent(): Promise<{ items: unknown[] }> }> }, n: number): Promise<string> {
+  const content = await (await doc.getPage(n)).getTextContent();
+  return (content.items as { str?: string; hasEOL?: boolean }[]).map((i) => (i.str ?? "") + (i.hasEOL ? "\n" : "")).join("");
+}
+
+/**
+ * Pages near the start that look like a table of contents: a page with a
+ * "Contents"/"Inhalt" heading, plus the pages right after it that are full
+ * of page numbers too.
+ */
+async function findTocPages(doc: Parameters<typeof pageText>[0] & { numPages: number }): Promise<string[]> {
+  const found: string[] = [];
+  const last = Math.min(doc.numPages, 24);
+  for (let n = 1; n <= last; n++) {
+    const text = await pageText(doc, n);
+    const lines = text.split("\n").map((l) => l.trim()).filter(Boolean);
+    const head = lines.slice(0, 6).join(" ");
+    const numeric = lines.filter((l) => /\d{1,4}\W?$/.test(l)).length / Math.max(1, lines.length);
+    if (TOC_HEADING.test(head) || (found.length > 0 && lines.length >= 8 && numeric > 0.2)) found.push(text);
+    else if (found.length > 0) break;
+    if (found.length >= 4) break;
+  }
+  return found;
+}
+
+async function readPdf(file: File): Promise<Pick<DetectedFile, "pages" | "landscape" | "outline" | "tocPages">> {
   const pdfjs = await loadPdfJs();
   const doc = await pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) }).promise;
   try {
@@ -75,7 +104,9 @@ async function readPdf(file: File): Promise<Pick<DetectedFile, "pages" | "landsc
     };
     await walk(raw, 0);
 
-    return { pages: doc.numPages, landscape: viewport.width > viewport.height, outline };
+    // Books without bookmarks: read the printed table of contents instead.
+    const tocPages = outline.length < 3 && doc.numPages >= 30 ? await findTocPages(doc).catch(() => []) : undefined;
+    return { pages: doc.numPages, landscape: viewport.width > viewport.height, outline, ...(tocPages?.length ? { tocPages } : {}) };
   } finally {
     await doc.destroy();
   }

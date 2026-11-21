@@ -19,6 +19,8 @@ export interface DetectedFile {
   landscape?: boolean;
   /** PDF bookmarks with their 1-based start page. */
   outline?: OutlineEntry[];
+  /** PDF without bookmarks: text of the pages that look like a table of contents. */
+  tocPages?: string[];
   /** Video: length in minutes. */
   durationMinutes?: number;
   error?: string;
@@ -167,7 +169,22 @@ const TOC_LINE = /^(.*?\S)[\s.·…_-]+(\d{1,4})\s*$/;
  * its start page. Uses top-level entries ("3 Cells") when there are also
  * sub-entries ("3.1 Membranes"). The last chapter ends at `lastPage` if given.
  */
-export function parseToc(text: string, lastPage?: number): { title: string; pages: number; include: boolean; estimated: boolean }[] {
+export function parseToc(text: string, lastPage?: number): TocChapter[] {
+  const lines = parseLineToc(text, lastPage);
+  // Scanned books often come out as columns (titles, then page numbers) –
+  // try reading the block structure when that finds more chapters.
+  const blocks = parseBlockToc(text);
+  return blocks.length >= 3 && blocks.length > lines.filter((x) => x.include).length ? blocks : lines;
+}
+
+export interface TocChapter {
+  title: string;
+  pages: number;
+  include: boolean;
+  estimated: boolean;
+}
+
+function parseLineToc(text: string, lastPage?: number): TocChapter[] {
   const entries = text
     .split(/\r?\n/)
     .map((line) => line.trim().match(TOC_LINE))
@@ -195,6 +212,111 @@ export function parseToc(text: string, lastPage?: number): { title: string; page
     include: looksLikeChapter(e.title),
     estimated: pagesKnown[i] === undefined,
   }));
+}
+
+const BULLET = /^[•■▪●◦*·]\s*/;
+/** A line that is just a page number, maybe glued to a prefix ("AB10", "ABABAB23", "1]"). */
+const NUMBER_LINE = /^(\p{L}*)(\d{1,4})[\])}.,;:]?$/u;
+/** A title line that continues on the next line ("Schule und" / "Ausbildung"). */
+const CONTINUES = /(\b(und|and|&|of|for|the|der|die|das|mit|von|zu|im|in|am)|[,–-])$/i;
+
+/**
+ * Undoes OCR letter-spacing: "E s s e n u n d T rin k e n" → "Essen und
+ * Trinken". Only touches lines that are mostly 1–2 letter fragments.
+ */
+export function unspace(text: string): string {
+  const tokens = text.trim().split(/\s+/);
+  const short = tokens.filter((t) => t.length <= 2).length;
+  if (tokens.length < 3 || short / tokens.length < 0.5) return text.trim();
+  return tokens
+    .join("")
+    .replace(/(\p{Ll})(\p{Lu})/gu, "$1 $2")
+    .replace(/(\p{Ll}{3,})(und|and)(?=\s|$)/gu, "$1 $2");
+}
+
+/**
+ * Tables of contents of scanned books, where every chapter has the same
+ * sub-entries ("Schritt A–E, Phonetik, Test, …") and the page numbers come
+ * as separate columns. The line repeated in every chapter marks the
+ * chapters; the line(s) before it are the chapter title; the first number of
+ * each column of page numbers is a chapter's start page.
+ */
+export function parseBlockToc(text: string): TocChapter[] {
+  const lines = text
+    .split(/\r?\n/)
+    .map((l) => l.replace(BULLET, "").trim())
+    .filter(Boolean);
+  const isNumber = (l: string) => NUMBER_LINE.test(l);
+  const key = (l: string) => l.toLowerCase().replace(/\s+/g, " ");
+
+  const counts = new Map<string, number>();
+  for (const l of lines) if (!isNumber(l) && l.length > 1) counts.set(key(l), (counts.get(key(l)) ?? 0) + 1);
+  const max = Math.max(0, ...counts.values());
+  if (max < 3) return [];
+  const anchor = key(lines.find((l) => !isNumber(l) && counts.get(key(l)) === max)!);
+  const repeated = new Set([...counts].filter(([, n]) => n >= Math.max(3, max / 2)).map(([k]) => k));
+
+  // Chapter titles: the line before each anchor, plus earlier lines that continue into it.
+  const titles: string[] = [];
+  lines.forEach((l, i) => {
+    if (key(l) !== anchor) return;
+    const parts: string[] = [];
+    for (let j = i - 1; j >= 0; j--) {
+      const prev = lines[j]!;
+      if (isNumber(prev) || repeated.has(key(prev)) || !/\p{L}{2}/u.test(prev.replace(/\s/g, ""))) break;
+      if (parts.length > 0 && !CONTINUES.test(unspace(prev))) break;
+      parts.unshift(prev);
+      if (parts.length >= 3) break;
+    }
+    if (parts.length) titles.push(unspace(parts.join(" ")));
+  });
+  if (titles.length < 3) return [];
+
+  // Columns of page numbers: a run starts after a text line or with a prefix ("AB10").
+  const runs: { start: number; max: number }[] = [];
+  let run: { start: number; max: number } | undefined;
+  for (const l of lines) {
+    const m = l.match(NUMBER_LINE);
+    if (!m) {
+      run = undefined;
+      continue;
+    }
+    const n = Number(m[2]);
+    if (!run || m[1]) runs.push((run = { start: n, max: n }));
+    else run.max = Math.max(run.max, n);
+  }
+  const starts = increasing(runs.map((r) => r.start));
+  const usable = starts.length === titles.length;
+
+  // "LektionLektion…Lektion" (a label glued once per chapter) → "Lektion 3: …".
+  let label: string | undefined;
+  for (const l of lines) {
+    const m = l.match(/^(\p{Lu}\p{Ll}{3,}?)\1+\d*$/u);
+    if (m && l.replace(/\d+$/, "").length / m[1]!.length === titles.length) label = m[1];
+  }
+
+  const known = usable ? starts.slice(1).map((s, i) => s - starts[i]!) : [];
+  const lastRun = usable ? runs.find((r) => r.start === starts[starts.length - 1]) : undefined;
+  if (lastRun && lastRun.max > lastRun.start) known.push(lastRun.max - lastRun.start + 1);
+  const sorted = known.slice().sort((a, b) => a - b);
+  const median = sorted.length ? sorted[Math.floor(sorted.length / 2)]! : 20;
+  return titles.map((title, i) => ({
+    title: label ? `${label} ${i + 1}: ${title}` : title,
+    pages: known[i] !== undefined && known[i]! > 0 ? known[i]! : median,
+    include: true,
+    estimated: known[i] === undefined || known[i]! <= 0,
+  }));
+}
+
+/** Longest strictly increasing subsequence (earliest one). */
+function increasing(values: number[]): number[] {
+  const best: number[][] = [];
+  for (const v of values) {
+    let pick: number[] = [];
+    for (const seq of best) if (seq[seq.length - 1]! < v && seq.length > pick.length) pick = seq;
+    best.push([...pick, v]);
+  }
+  return best.reduce((a, b) => (b.length > a.length ? b : a), [] as number[]);
 }
 
 /** Two chunks become one: recordings and page/slide counts add up. */
@@ -288,6 +410,23 @@ export function buildDraft(files: DetectedFile[], existing: Subject[], today: IS
       // A book: one chunk per chapter, in book order (no lecture pairing).
       chapters.forEach((ch) =>
         add(subject, { ...base, number: undefined, id: draftId(), title: ch.title, pages: ch.pages, include: ch.include, sources: [name] }),
+      );
+      continue;
+    }
+    // No bookmarks: read the printed table of contents.
+    const fromToc = file.kind === "pdf" && pages >= 30 ? (file.tocPages ?? []).map((t) => parseToc(t)).filter((c) => c.length >= 3).flat() : [];
+    if (fromToc.length >= 3) {
+      fromToc.forEach((ch) =>
+        add(subject, {
+          ...base,
+          number: undefined,
+          id: draftId(),
+          title: ch.title,
+          pages: ch.pages,
+          include: ch.include,
+          sources: [`${name} (table of contents)`],
+          ...(ch.estimated ? { note: "pages estimated – please check" } : {}),
+        }),
       );
       continue;
     }
