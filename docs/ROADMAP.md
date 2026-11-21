@@ -19,8 +19,9 @@
   connect desktop Anki, create decks, import subjects from Anki decks.
 - ✅ **Accounts + sync** (Firebase): Google and email/password sign-in,
   forgot-password emails, plan synced live across devices, "which plan to
-  keep?" on first sign-in, sign-out removes data from the device. Tested with
-  emulators incl. security rules. **Needs the real Firebase config** to go live.
+  keep?" on first sign-in, sign-out removes data from the device. **Live**
+  (Firebase project `studymaster-caa36`); tested on the live site (sign-up,
+  second device, sync) and the security rules against the real project.
 - ✅ Docs, `CLAUDE.md`, GitHub Actions CI (typecheck, tests, build).
 
 ## Next, in order
