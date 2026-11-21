@@ -643,5 +643,6 @@ export function swapReader(subject: DraftSubject): DraftSubject {
 
 /** An empty chapter the user adds in the review (e.g. a section the reader missed). */
 export function newDraftChunk(): DraftChunk {
-  return { id: draftId(), include: true, title: "", recordingMinutes: 0, pages: 0, slides: 0, sources: ["Added by you"], note: "add pages or slides" };
+  // Pages start at 0 on purpose: filling them in is the user's job, no warning needed.
+  return { id: draftId(), include: true, title: "", recordingMinutes: 0, pages: 0, slides: 0, sources: ["Added by you"] };
 }
