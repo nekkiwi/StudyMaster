@@ -30,6 +30,8 @@
   timetable PDFs/photos via AI) block study sessions; week view shows classes.
 - ✅ Google Calendar sign-in: pick calendars directly (needs Calendar API +
   scope + test users in Google Cloud, see HOSTING.md).
+- ✅ Phone-first Today + evening check-in reminder (Web Push).
+- ⏳ "Tell StudyMaster…" box (plan changes in plain words, with preview).
 - ⏳ Microsoft/Outlook sign-in; Google app verification for all users.
 - ⏳ Android: start *studying* the exact deck. Options: propose a
   `anki://x-callback-url/study?deck=` deep link to AnkiDroid (like AnkiMobile),

@@ -3,8 +3,10 @@ import { CalendarCheck2, Coffee, Flame, Palmtree, PartyPopper, Sparkles } from "
 import { useMemo } from "react";
 import { CheckInCard } from "../components/checkin";
 import { ProposalBanner } from "../components/proposal";
+import { ReminderPrompt } from "../components/reminders";
 import { SessionCard } from "../components/session";
-import { Badge, Card, EmptyState, ProgressRing, SectionTitle, SubjectDot } from "../components/ui";
+import { Badge, Card, cx, EmptyState, ProgressRing, SectionTitle, SubjectDot } from "../components/ui";
+import { toClock } from "../lib/calendar";
 import { formatHours, formatLongDay, formatMinutes, formatShort, relativeDays, SLOT_LABEL } from "../lib/format";
 import { recentCheckIns, subjectProgress } from "../lib/stats";
 import type { Planner } from "../planner";
@@ -31,7 +33,15 @@ export function TodayView({ planner }: { planner: Planner }) {
   const bufferToday = shown.plan.bufferSlots.filter((s) => s.date === today);
   const examsToday = state.subjects.filter((s) => s.examDate === today);
   const minutes = sessions.reduce((a, s) => a + sessionMinutes(s), 0);
-  const evening = new Date().getHours() >= 17;
+  const slotTimes = useStore((s) => s.settings.slotTimes);
+  const now = new Date().getHours() * 60 + new Date().getMinutes();
+  // The session happening now, else the next one today.
+  const current = sessions.find((s) => slotTimes[s.slot].start <= now && now < slotTimes[s.slot].end);
+  const next = current ? undefined : sessions.find((s) => slotTimes[s.slot].start > now);
+  const lastEnd = Math.max(0, ...sessions.map((s) => slotTimes[s.slot].end));
+  // Evening (or after the last session): the check-in comes first.
+  const evening = new Date().getHours() >= 17 || (sessions.length > 0 && now >= lastEnd);
+  const canCheckIn = !record && sessions.some((s) => s.items.length > 0);
 
   const tomorrow = addDays(today, 1);
   const tomorrowSessions = shown.plan.sessions.filter((s) => s.date === tomorrow);
@@ -48,11 +58,17 @@ export function TodayView({ planner }: { planner: Planner }) {
         )}
       </header>
 
-      <ProposalBanner planner={planner} />
+      {/* On wide screens the plan warning stays on top; on phones it comes after today. */}
+      <div className="hidden lg:block">
+        <ProposalBanner planner={planner} />
+      </div>
 
       {planner.pendingDays.map((d) => (
         <CheckInCard key={d} planner={planner} date={d} subjects={subjects} prominent />
       ))}
+
+      {canCheckIn && evening && <CheckInCard planner={planner} date={today} subjects={subjects} prominent />}
+      <ReminderPrompt planner={planner} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <section className="space-y-4">
@@ -109,9 +125,23 @@ export function TodayView({ planner }: { planner: Planner }) {
             </Card>
           ) : (
             <>
-              {sessions.map((s) => (
-                <SessionCard key={s.slot} session={s} subjects={subjects} />
-              ))}
+              {sessions.map((s) => {
+                const isNow = s === current;
+                const isNext = s === next;
+                const t = slotTimes[s.slot];
+                return (
+                  <div key={s.slot}>
+                    {(isNow || isNext) && (
+                      <p className="mb-1.5 text-xs font-semibold tracking-wide text-indigo-600 uppercase dark:text-indigo-400">
+                        {isNow ? `Now · ${toClock(t.start)}–${toClock(t.end)}` : `Next · ${toClock(t.start)}`}
+                      </p>
+                    )}
+                    <div className={cx("rounded-2xl", (isNow || isNext) && "ring-2 ring-indigo-500/50")}>
+                      <SessionCard session={s} subjects={subjects} />
+                    </div>
+                  </div>
+                );
+              })}
               {bufferToday.length > 0 && (
                 <div className="buffer-stripes rounded-2xl border border-dashed border-amber-300 px-4 py-3 text-sm text-amber-800 dark:border-amber-500/40 dark:text-amber-200">
                   {bufferToday.map((b) => SLOT_LABEL[b.slot]).join(" & ")}: buffer, kept free for catching up.
@@ -120,9 +150,11 @@ export function TodayView({ planner }: { planner: Planner }) {
             </>
           )}
 
-          {!record && sessions.some((s) => s.items.length > 0) && (
-            <CheckInCard planner={planner} date={today} subjects={subjects} prominent={evening} />
-          )}
+          {canCheckIn && !evening && <CheckInCard planner={planner} date={today} subjects={subjects} />}
+
+          <div className="lg:hidden">
+            <ProposalBanner planner={planner} />
+          </div>
 
           {tomorrowSessions.length > 0 && (
             <div>

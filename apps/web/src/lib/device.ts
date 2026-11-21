@@ -11,6 +11,12 @@ interface DeviceState {
   /** This device studies Anki on AnkiWeb in the browser (no Anki app). */
   ankiWeb: boolean;
   setAnkiWeb(value: boolean): void;
+  /** Evening check-in reminders are on for this device (push endpoint). */
+  pushEndpoint?: string;
+  setPushEndpoint(endpoint: string | undefined): void;
+  /** The reminder card on Today was dismissed. */
+  reminderAsked: boolean;
+  setReminderAsked(value: boolean): void;
 }
 
 export const useDevice = create<DeviceState>()(
@@ -20,6 +26,9 @@ export const useDevice = create<DeviceState>()(
       setAnkiConnected: (ankiConnected) => set({ ankiConnected }),
       ankiWeb: false,
       setAnkiWeb: (ankiWeb) => set({ ankiWeb }),
+      setPushEndpoint: (pushEndpoint) => set({ pushEndpoint }),
+      reminderAsked: false,
+      setReminderAsked: (reminderAsked) => set({ reminderAsked }),
     }),
     { name: "studymaster-device", storage: createJSONStorage(() => localStorage) },
   ),

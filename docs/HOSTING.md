@@ -155,21 +155,29 @@ dashboard (Workers → app → Settings → Variables and Secrets → Add → Se
 and survive deploys:
 - `ANTHROPIC_API_KEY` – "Let AI read the contents". Without it the endpoint
   answers "not set up yet".
-Never export anything but the default handler from `apps/api/src/index.ts`
-(Cloudflare treats named exports of the main module as entry points).
+Only export the default handler and Durable Object classes from
+`apps/api/src/index.ts` (Cloudflare treats named exports of the main module
+as entry points).
+
+### Evening reminders (Durable Object, no setup)
+`wrangler.jsonc` binds the Durable Object `Reminders` (SQLite storage,
+migration `v1`, free plan). One instance per user keeps push subscriptions,
+check-in time, time zone, planned days and the last check-in, and sets an
+alarm for the next check-in time; another instance creates and keeps the
+Web Push (VAPID) keys – no secret to configure. Pushes carry no payload; the
+service worker (`public/push-sw.js`) shows "How did today go?".
 
 ### Google Calendar sign-in (one-time setup in Google Cloud)
 "Connect Google Calendar" uses the Firebase Google provider with the scope
 `https://www.googleapis.com/auth/calendar.readonly` and calls the Calendar API
-from the browser. In the Google Cloud console of the Firebase project
-(`studymaster-caa36`):
-1. APIs & Services → Library → **Google Calendar API** → Enable.
-2. Google Auth Platform (OAuth consent screen) → **Data access** → Add scope
-   `…/auth/calendar.readonly`.
-3. **Audience**: while the app is in "Testing", add every Google account that
-   should use it as a test user (max. 100). For everyone: publish the app;
-   until Google verifies it (privacy policy, own domain, review), users see an
-   "unverified app" warning they can click through.
+from the browser. The only required step (one click, by the project owner): enable the
+**Google Calendar API** for the Firebase project –
+https://console.cloud.google.com/apis/library/calendar-json.googleapis.com?project=studymaster-caa36
+→ "Enable". The app shows this link if the API is still off.
+Until Google verifies the app (privacy policy, own domain, review), users see
+"Google hasn't verified this app" → "Continue"; unverified apps are limited
+to 100 users for the calendar permission. (If the consent screen is still in
+"Testing", add users as test users or publish it.)
 Calendar links (ICS) work for everyone without this.
 
 ### Manual deploy (fallback, from your own computer)

@@ -11,14 +11,17 @@ import Anthropic from "@anthropic-ai/sdk";
 import { AuthError, verifyFirebaseToken } from "./firebase";
 import { allow } from "./rateLimit";
 import { fetchIcs, readTimetable } from "./calendar";
+import { Reminders, type ReminderUpdate } from "./push";
 import { MAX_TEXT, readTocStable, TocError } from "./toc";
 
-// Only the default export may be exported from this file: Cloudflare treats
-// every named export of the main module as an entry point.
+// Cloudflare treats every named export of the main module as an entry point:
+// only the default handler and Durable Object classes may be exported here.
+export { Reminders };
 
 interface Env {
   ASSETS: Fetcher;
   ANTHROPIC_API_KEY?: string;
+  REMINDERS: DurableObjectNamespace<Reminders>;
 }
 
 /** Firebase project (public, same as the web app's config). */
@@ -80,6 +83,27 @@ async function handleTimetable(request: Request, env: Env): Promise<Response> {
   return withClaude(env, (client) => readTimetable(client, b.data as string, b.mediaType as string));
 }
 
+/** The server's public push key (for the browser's subscription). */
+async function handlePushKey(env: Env): Promise<Response> {
+  const keys = await env.REMINDERS.get(env.REMINDERS.idFromName("vapid")).vapidKeys();
+  return reply({ publicKey: keys.publicKey });
+}
+
+/** Reminder settings and state of the signed-in user (subscription, time, planned days, check-ins). */
+async function handlePush(request: Request, env: Env): Promise<Response> {
+  if (request.method !== "POST") return reply({ error: "Use POST." }, 405);
+  const token = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? "";
+  let uid: string;
+  try {
+    uid = await verifyFirebaseToken(token, FIREBASE_PROJECT);
+  } catch {
+    return reply({ error: "Please sign in again." }, 401);
+  }
+  const change = await body<ReminderUpdate>(request);
+  if (!change) return reply({ error: "Send JSON." }, 400);
+  return reply(await env.REMINDERS.get(env.REMINDERS.idFromName(`user:${uid}`)).update(change));
+}
+
 /** Runs a Claude call and turns errors into friendly answers. */
 async function withClaude(env: Env, run: (client: Anthropic) => Promise<unknown>): Promise<Response> {
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 1 });
@@ -102,6 +126,8 @@ export default {
     if (url.pathname === "/api/toc") return handleToc(request, env);
     if (url.pathname === "/api/ics") return handleIcs(request);
     if (url.pathname === "/api/timetable") return handleTimetable(request, env);
+    if (url.pathname === "/api/push/key") return handlePushKey(env);
+    if (url.pathname === "/api/push") return handlePush(request, env);
     if (url.pathname.startsWith("/api/")) return reply({ error: "Not found." }, 404);
     return env.ASSETS.fetch(request);
   },

@@ -128,6 +128,15 @@ least an hour would stay empty (max two). "Only one" never mixes (sessions
 may end early); "Mix freely" is the old behaviour. With steady pacing,
 subjects alternate between sessions instead of mixing inside one.
 
+### Today on the phone + evening reminder
+Today is the home screen: the session happening now (or next) is
+highlighted with its clock time; in the evening or after the last session
+the check-in comes first; the "doesn't fit" banner moves below today on
+phones. **Evening reminder** (Settings → Evening check-in, or the one-time
+"Get a nudge at 20:00?" card on Today): Web Push per device, sent at the
+check-in time only on days with sessions and only if nobody checked in yet
+(any device). iPhone: works after "Add to Home Screen". Needs sign-in.
+
 ### Study style
 Each user picks the steps for a lecture/chapter and their order
 (`settings.workflow`): watch the lecture, read, write a summary, make Anki

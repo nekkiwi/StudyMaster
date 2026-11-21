@@ -5,6 +5,7 @@ import { useAccount, wasSignedIn } from "./account";
 import { AccountChip, SignInDialog } from "./components/account";
 import { AnkiAutoSync, AnkiPromptDialog } from "./components/ankiConnect";
 import { CalendarAutoRefresh } from "./components/calendars";
+import { ReminderSync } from "./components/reminders";
 import { toast, Toaster } from "./components/toast";
 import { cx } from "./components/ui";
 import { formatShort } from "./lib/format";
@@ -122,7 +123,7 @@ function Main() {
         {tab === "today" && <TodayView planner={planner} />}
         {tab === "plan" && <PlanView planner={planner} />}
         {tab === "subjects" && <SubjectsView planner={planner} />}
-        {tab === "settings" && <SettingsView />}
+        {tab === "settings" && <SettingsView planner={planner} />}
       </main>
 
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-slate-200/80 bg-white/90 pb-safe backdrop-blur md:hidden dark:border-slate-800 dark:bg-slate-900/90">
@@ -147,6 +148,7 @@ function Main() {
       <AnkiPromptDialog />
       <AnkiAutoSync />
       <CalendarAutoRefresh />
+      <ReminderSync planner={planner} />
     </div>
   );
 }

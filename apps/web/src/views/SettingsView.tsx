@@ -13,6 +13,8 @@ import {
 } from "../components/settingsForm";
 import { AccountSection } from "../components/account";
 import { CalendarSection } from "../components/calendars";
+import { ReminderToggle } from "../components/reminders";
+import type { Planner } from "../planner";
 import { AnkiConnectSection } from "../components/ankiConnect";
 import { toast } from "../components/toast";
 import { Button, Card, cx, Field, TextInput } from "../components/ui";
@@ -47,7 +49,7 @@ function Section({ title, description, children, collapsible }: { title: string;
   );
 }
 
-export function SettingsView() {
+export function SettingsView({ planner }: { planner: Planner }) {
   const checkInTime = useStore((s) => s.checkInTime);
   const setCheckInTime = useStore((s) => s.setCheckInTime);
   const importData = useStore((s) => s.importData);
@@ -106,12 +108,15 @@ export function SettingsView() {
             <BufferSettings />
           </Section>
           <Section title="Evening check-in" description="When to ask how your day went.">
-            <Field label="Remind me at" hint="Push notifications arrive with the next update. For now, the check-in waits for you on the Today screen.">
-              <div className="flex items-center gap-2">
-                <Bell size={16} className="text-slate-400" />
-                <TextInput type="time" value={checkInTime} onChange={(e) => setCheckInTime(e.target.value)} className="w-32" />
-              </div>
-            </Field>
+            <div className="space-y-4">
+              <Field label="Check-in time" hint="When to ask how your day went. The check-in also waits for you on the Today screen.">
+                <div className="flex items-center gap-2">
+                  <Bell size={16} className="text-slate-400" />
+                  <TextInput type="time" value={checkInTime} onChange={(e) => setCheckInTime(e.target.value)} className="w-32" />
+                </div>
+              </Field>
+              <ReminderToggle planner={planner} />
+            </div>
           </Section>
         </div>
         <div className="space-y-6">

@@ -11,7 +11,8 @@ export default defineConfig({
       registerType: "autoUpdate",
       // Firebase is only needed when signing in (which needs internet anyway),
       // so it isn't cached for offline use on every device.
-      workbox: { globIgnores: ["**/firebase-*.js"] },
+      // push-sw.js shows the evening check-in reminder (Web Push).
+      workbox: { globIgnores: ["**/firebase-*.js"], importScripts: ["push-sw.js"] },
       includeAssets: ["icon.svg", "apple-touch-icon.png"],
       manifest: {
         name: "StudyMaster",

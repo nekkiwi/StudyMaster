@@ -80,15 +80,21 @@ apps/web/        React 19 + Vite 6 + Tailwind 4 PWA (zustand for state)
   src/components/ankiConnect.tsx  ▶ Anki button logic, Settings "Anki app",
                       "From Anki" import picker, subject editor deck links
   src/components/account.tsx  Sign-in form (landing page + dialog), account chip/section
-  src/components/calendars.tsx  Calendars & timetable: add (link/.ics/AI), list,
-                      session times, auto refresh
+  src/components/calendars.tsx  Calendars & timetable: add (Google/link/.ics/AI),
+                      list, session times, auto refresh
+  src/components/reminders.tsx  Evening reminder: switch, Today prompt, sync
+  public/push-sw.js   Service worker part that shows the reminder notification
 apps/api/        Cloudflare Worker code (same Worker as the site, only /api/*)
-  src/index.ts        Router – only a default export allowed (see HOSTING.md)
+  src/index.ts        Router – only the default handler + Durable Object classes
+                      may be exported (see HOSTING.md)
   src/firebase.ts     Firebase ID token check (no library)
   src/toc.ts          POST /api/toc: table of contents → chapters with Claude
                       Haiku 5.5 (structured output). Secret ANTHROPIC_API_KEY.
   src/calendar.ts     POST /api/ics (fetch calendar links, no CORS in browsers),
                       POST /api/timetable (PDF/photo → weekly classes, Claude)
+  src/push.ts         Durable Object "Reminders": per-user alarm at check-in time
+                      → Web Push (no payload); one instance keeps the VAPID keys
+  src/reminder.ts     Pure helpers: VAPID signing, time zones, when to remind
 ```
 
 ## How the planner works (short)

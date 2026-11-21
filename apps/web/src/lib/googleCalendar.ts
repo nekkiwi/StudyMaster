@@ -15,7 +15,13 @@ async function get<T>(token: string, path: string): Promise<T> {
   const res = await fetch(`${API}${path}`, { headers: { authorization: `Bearer ${token}` } });
   if (res.status === 401) throw new Error("Google access expired – press Update to connect again.");
   if (res.status === 403) {
-    throw new Error("Google refused calendar access. The Google Calendar API may not be switched on for StudyMaster yet (see docs/HOSTING.md).");
+    const body = await res.text();
+    if (/accessNotConfigured|SERVICE_DISABLED|has not been used|is disabled/i.test(body)) {
+      throw new Error(
+        "Google Calendar isn't switched on for StudyMaster yet. App owner: one click at console.cloud.google.com/apis/library/calendar-json.googleapis.com?project=studymaster-caa36 → Enable.",
+      );
+    }
+    throw new Error("Google refused calendar access – did you allow StudyMaster to see your calendars?");
   }
   if (!res.ok) throw new Error(`Google Calendar answered with an error (${res.status}).`);
   return (await res.json()) as T;
