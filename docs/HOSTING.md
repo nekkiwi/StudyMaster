@@ -35,6 +35,27 @@ and scheduled jobs, all on free tiers, with auto-deploy from GitHub. (Vercel /
 Netlify are fine for the static part, but cron + DB + API in one place tips it
 to Cloudflare. Firebase needs the pay-as-you-go plan for scheduled functions.)
 
+## Accounts: Firebase (login + sync)
+Login and data sync run on **Firebase** (free Spark plan); the website stays on
+Cloudflare. Cloudflare's free Workers plan allows ~10 ms CPU per request, too
+little for secure password hashing – see decision #29.
+
+**One-time setup** (console.firebase.google.com):
+1. Add project `StudyMaster` (Analytics off).
+2. Authentication → Sign-in method: enable **Email/Password** and **Google**.
+3. Authentication → Settings → Authorized domains: add
+   `app.studymaster.workers.dev` (and any custom domain later).
+4. Firestore Database → Create → location **eur3** → production mode.
+5. Firestore → Rules: paste `/firestore.rules` → Publish.
+6. Project settings → Your apps → Web → register → copy the `firebaseConfig`
+   values into `apps/web/src/lib/firebaseConfig.ts` (public values, not secrets).
+
+**Local testing without the real project:**
+```bash
+npm run emulators   # Firebase Auth + Firestore emulators (needs Java), uses firestore.rules
+npm run dev:cloud   # app connected to the emulators
+```
+
 ## Backend plan
 - **Accounts:** "Sign in with Google" (one tap on Android) + email magic link.
   No passwords.

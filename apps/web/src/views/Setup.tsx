@@ -2,6 +2,8 @@ import { addDays, planWithEscalation, type Subject } from "@studymaster/core";
 import { ArrowLeft, ArrowRight, CalendarDays, Check, GraduationCap, Layers, Plus, Sparkles, Trash2, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { BufferSettings, DaysOffEditor, RhythmSettings } from "../components/settingsForm";
+import { useAccount } from "../account";
+import { SignInDialog } from "../components/account";
 import { ImportDialog } from "../components/importer";
 import { ChunkList, SubjectFields } from "../components/subjectForm";
 import { Badge, Button, Card, cx, SubjectDot } from "../components/ui";
@@ -71,6 +73,8 @@ export function Setup() {
 }
 
 function Welcome({ onStart, onDemo }: { onStart: () => void; onDemo: () => void }) {
+  const configured = useAccount((s) => s.configured);
+  const [signIn, setSignIn] = useState(false);
   return (
     <div className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center px-6 py-12">
       <img src="/icon.svg" alt="" className="mb-6 h-16 w-16 rounded-2xl shadow-lg shadow-indigo-500/20" />
@@ -104,7 +108,19 @@ function Welcome({ onStart, onDemo }: { onStart: () => void; onDemo: () => void 
           <Sparkles size={18} /> Try with example data
         </Button>
       </div>
-      <p className="mt-6 text-sm text-slate-500">Takes about 5 minutes. Your data stays on this device.</p>
+      <p className="mt-6 text-sm text-slate-500">
+        Takes about 5 minutes. No account needed – your data stays on this device.
+        {configured && (
+          <>
+            {" "}
+            Already have an account?{" "}
+            <button type="button" className="font-medium text-indigo-600 hover:underline dark:text-indigo-400" onClick={() => setSignIn(true)}>
+              Sign in
+            </button>
+          </>
+        )}
+      </p>
+      <SignInDialog open={signIn} onClose={() => setSignIn(false)} />
     </div>
   );
 }

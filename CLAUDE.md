@@ -25,7 +25,13 @@ npm test             # all tests (Vitest): planner + web app
 npm run typecheck
 npm run build        # production build → apps/web/dist
 npm run deploy       # manual deploy: build + wrangler deploy (normally not needed)
+npm run emulators    # Firebase Auth + Firestore emulators (Java), uses firestore.rules
+npm run dev:cloud    # dev server connected to the emulators
 ```
+
+Accounts + sync: Firebase (login, Firestore `users/{uid}`); config in
+`apps/web/src/lib/firebaseConfig.ts` (public values; empty = accounts hidden).
+Rules in `/firestore.rules`. See docs/DESIGN.md → Accounts and sync.
 
 Deployment: a Cloudflare Worker with static assets (`wrangler.jsonc` at the
 root, Worker `app`) is built and deployed from GitHub on every push. Live at
@@ -50,6 +56,7 @@ packages/core/   Planning engine. Pure TypeScript, no dependencies, no DOM.
   test/               Vitest tests – add one for every planner change
 apps/web/        React 19 + Vite 6 + Tailwind 4 PWA (zustand for state)
   src/store.ts        All user data, saved to localStorage ("studymaster-v1")
+  src/account.ts      Sign-in state + sync engine (upload, live updates, plan choice)
   src/planner.ts      usePlanner(): computes the plan from the store, handles
                       plan start after check-ins and the approval logic
   src/views/          Today, PlanView (calendar), Subjects, SettingsView, Setup (wizard)
@@ -60,9 +67,11 @@ apps/web/        React 19 + Vite 6 + Tailwind 4 PWA (zustand for state)
                       importer (pure: files/TOC → draft subjects + chunks),
                       fileReaders (browser: pdf.js, fflate, video length),
                       anki (AnkiConnect client, deck names, phone links),
-                      device (per-device settings, never synced)
+                      device (per-device settings, never synced),
+                      cloud + firebaseConfig (Firebase, loaded on demand)
   src/components/importer.tsx  Import dialog: choose → read → review → add
   src/components/ankiConnect.tsx  ▶ Anki button logic + Settings "Anki app"
+  src/components/account.tsx  Sign-in dialog, plan choice, account chip/section
 ```
 
 ## How the planner works (short)
@@ -100,6 +109,8 @@ apps/web/        React 19 + Vite 6 + Tailwind 4 PWA (zustand for state)
 - Keep `vite` pinned at the repo root (`devDependencies`) so only one Vite
   version is installed – two copies break the plugin types.
 - Never put API keys in the web app. Anything with a key goes in the backend.
+  (Exception by design: the Firebase web config is public; access is
+  protected by Firebase Auth + firestore.rules.)
 
 ## Status
 

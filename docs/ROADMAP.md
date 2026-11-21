@@ -17,6 +17,10 @@
 - ✅ **Anki app**: ▶ Anki button per Anki task (desktop: exact deck via
   AnkiConnect; iPhone: AnkiMobile study link; Android: opens AnkiDroid),
   connect desktop Anki, create decks, import subjects from Anki decks.
+- ✅ **Accounts + sync** (Firebase): Google and email/password sign-in,
+  forgot-password emails, plan synced live across devices, "which plan to
+  keep?" on first sign-in, sign-out removes data from the device. Tested with
+  emulators incl. security rules. **Needs the real Firebase config** to go live.
 - ✅ Docs, `CLAUDE.md`, GitHub Actions CI (typecheck, tests, build).
 
 ## Next, in order

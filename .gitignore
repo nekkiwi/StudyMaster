@@ -5,3 +5,5 @@ coverage/
 *.log
 .env*
 .wrangler/
+dist-emu/
+*-debug.log

@@ -1,6 +1,8 @@
 import { diffPlans, type Plan } from "@studymaster/core";
 import { BookMarked, CalendarDays, Home, Settings as SettingsIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { useAccount, wasSignedIn } from "./account";
+import { AccountChip, PlanChoiceDialog, SignInDialog } from "./components/account";
 import { toast, Toaster } from "./components/toast";
 import { cx } from "./components/ui";
 import { formatShort } from "./lib/format";
@@ -64,19 +66,23 @@ function usePlanChangeNotes(plan: Plan) {
 
 export default function App() {
   const setupDone = useStore((s) => s.setupDone);
-  if (!setupDone) {
-    return (
-      <>
-        <Setup />
-        <Toaster />
-      </>
-    );
-  }
-  return <Main />;
+  const start = useAccount((s) => s.start);
+  // Devices that signed in before load Firebase right away to sync.
+  useEffect(() => {
+    if (wasSignedIn()) void start();
+  }, [start]);
+  return (
+    <>
+      {setupDone ? <Main /> : <Setup />}
+      <PlanChoiceDialog />
+      {!setupDone && <Toaster />}
+    </>
+  );
 }
 
 function Main() {
   const [tab, setTab] = useTab();
+  const [signIn, setSignIn] = useState(false);
   const planner = usePlanner();
   usePlanChangeNotes(planner.shown.plan);
   const attention = planner.pendingDays.length > 0 || (!!planner.proposal && !planner.declined);
@@ -105,7 +111,10 @@ function Main() {
             </button>
           ))}
         </nav>
-        <p className="mt-auto px-3 text-xs text-slate-400">Saved on this device</p>
+        <div className="mt-auto">
+          <AccountChip onSignIn={() => setSignIn(true)} />
+        </div>
+        <SignInDialog open={signIn} onClose={() => setSignIn(false)} />
       </aside>
 
       <main className="mx-auto w-full max-w-6xl px-4 pt-6 pb-28 sm:px-6 md:px-10 md:pt-10 md:pb-12">

@@ -8,6 +8,7 @@ import {
   RateSettings,
   RhythmSettings,
 } from "../components/settingsForm";
+import { AccountSection } from "../components/account";
 import { AnkiConnectSection } from "../components/ankiConnect";
 import { toast } from "../components/toast";
 import { Button, Card, cx, Field, TextInput } from "../components/ui";
@@ -81,6 +82,9 @@ export function SettingsView() {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <div className="space-y-6">
+          <Section title="Account" description="Sign in to keep your plan safe and in sync on all your devices.">
+            <AccountSection />
+          </Section>
           <Section title="Study rhythm" description="How much you want to study on a normal day.">
             <RhythmSettings />
           </Section>
@@ -109,7 +113,7 @@ export function SettingsView() {
           <Section title="Time estimates" description="Recordings, reading and writing cards. Reading and cards are scaled by the subject weight." collapsible>
             <RateSettings />
           </Section>
-          <Section title="Your data" description="Everything is stored on this device only.">
+          <Section title="Your data" description="Download a backup file, or start from scratch.">
             <div className="flex flex-wrap gap-2">
               <Button variant="secondary" onClick={download}>
                 <Download size={16} /> Export backup

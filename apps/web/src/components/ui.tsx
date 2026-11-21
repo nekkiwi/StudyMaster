@@ -1,5 +1,6 @@
 import { X } from "lucide-react";
 import { useEffect, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 export function cx(...classes: (string | false | null | undefined)[]): string {
   return classes.filter(Boolean).join(" ");
@@ -320,7 +321,9 @@ export function Modal({
   }, [open, onClose]);
 
   if (!open) return null;
-  return (
+  // Rendered at the end of <body> so no parent (e.g. a blurred sidebar) can
+  // confine the fixed overlay.
+  return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-label={title}>
       <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[2px]" onClick={onClose} />
       <div
@@ -338,7 +341,8 @@ export function Modal({
         <div className="overflow-y-auto px-5 py-4">{children}</div>
         {footer && <div className="flex justify-end gap-2 border-t border-slate-100 px-5 py-3 pb-safe dark:border-slate-800">{footer}</div>}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 

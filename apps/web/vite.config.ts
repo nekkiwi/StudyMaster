@@ -9,6 +9,9 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: "autoUpdate",
+      // Firebase is only needed when signing in (which needs internet anyway),
+      // so it isn't cached for offline use on every device.
+      workbox: { globIgnores: ["**/firebase-*.js"] },
       includeAssets: ["icon.svg", "apple-touch-icon.png"],
       manifest: {
         name: "StudyMaster",
@@ -26,5 +29,12 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks: (id) => (/node_modules\/(@firebase|firebase)\//.test(id) ? "firebase" : undefined),
+      },
+    },
+  },
   test: { environment: "node" },
 });

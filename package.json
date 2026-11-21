@@ -10,7 +10,9 @@
     "build": "npm run build -w @studymaster/web",
     "test": "npm run test --workspaces --if-present",
     "typecheck": "npm run typecheck --workspaces --if-present",
-    "deploy": "npm run build && npx wrangler@4 deploy"
+    "deploy": "npm run build && npx wrangler@4 deploy",
+    "emulators": "npx firebase-tools@13 emulators:start --only auth,firestore --project demo-studymaster",
+    "dev:cloud": "VITE_FIREBASE_EMULATORS=1 npm run dev -w @studymaster/web"
   },
   "devDependencies": {
     "vite": "^6.4.6"

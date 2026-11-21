@@ -133,6 +133,25 @@ open, press Connect → Anki shows an "allow this website?" popup
 AnkiWeb has no public API or "sign in with AnkiWeb", so an Anki account can't
 be used for login or for reading decks on phones.
 
+### Accounts and sync
+- **No account needed.** Without one, everything stays on the device.
+- **Sign in** (Settings → Account, the sidebar, or "Already have an account?"
+  on the welcome screen): **Google** or **email + password** (with "forgot
+  password" emails). Apple later (needs a $99/year Apple developer account).
+- Each user's plan is one Firestore document `users/{uid}` (the app data as a
+  JSON string + `updatedAt` + `device`). Rules (`/firestore.rules`): only the
+  owner can read or write it; no other fields; < 900 kB.
+- **Sync:** changes upload ~1.5 s after the last edit; other devices get them
+  live. Last write wins.
+- **On sign-in:** account empty → this device's plan is uploaded. Same account
+  as before → whichever changed last wins. This device empty → the account's
+  plan is loaded. Both have a plan → the user picks one ("Use my account's
+  plan" / "Keep this device's plan").
+- **Sign out** removes the plan from the device (shared devices stay private);
+  it stays in the account.
+- Per-device settings (e.g. the Anki connection) are never synced.
+- Firebase loads only when someone signs in (or signed in before on this device).
+
 ## 4. Effort model
 
 Per chunk (all values are settings with these defaults):
