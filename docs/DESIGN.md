@@ -170,6 +170,11 @@ onboarding week step). Each calendar is a university calendar or not, and
   like "Uni", "Vorlesung", "Timetable" are pre-ticked). Events come from the
   Calendar API (`singleEvents`, all-day / cancelled / "free" events skipped).
   The browser token lasts ~1 h, so updating later is one tap (↻).
+- **Apple** tab: iCloud has no sign-in for other apps, so the user copies the
+  calendar's link once (iPhone: Calendars → ⓘ → Public Calendar → Share
+  Link; Mac: Share Calendar → Public; subscribed university calendars: Get
+  Info → URL); refreshed automatically like any link. (A native iPhone app
+  with calendar access would remove this step – later.)
 - **Calendar link (ICS)** with step-by-step help for Google Calendar (secret
   iCal address), Outlook/Microsoft 365 (publish calendar), Apple iCloud
   (public calendar, webcal://) and university portals. Fetched by the

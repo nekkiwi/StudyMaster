@@ -200,7 +200,7 @@ export function SessionTimes() {
   );
 }
 
-type Way = "google" | "link" | "file" | "timetable";
+type Way = "google" | "apple" | "link" | "file" | "timetable";
 
 /** Calendar names that sound like classes – pre-marked as university calendars. */
 const UNI_NAME = /uni|vorlesung|stundenplan|timetable|lecture|class|kurs|semester|campus|studium|course|seminar/i;
@@ -222,15 +222,6 @@ const PROVIDERS: { id: string; name: string; steps: string[] }[] = [
       "Open Outlook on the web → ⚙ Settings → Calendar → Shared calendars.",
       "Under “Publish a calendar”, pick the calendar and “Can view all details” → Publish.",
       "Copy the ICS link.",
-    ],
-  },
-  {
-    id: "apple",
-    name: "Apple iCloud",
-    steps: [
-      "On iPhone: Calendar → Calendars → tap ⓘ next to the calendar. On a Mac: right-click the calendar → Share Calendar.",
-      "Turn on “Public Calendar”.",
-      "Copy the link (starts with webcal://).",
     ],
   },
   {
@@ -322,7 +313,7 @@ function AddCalendar({ open, onClose, range }: { open: boolean; onClose: () => v
     setBusy(true);
     try {
       const events = await parseIcs(await fetchCalendarLink(url), range.from, range.to);
-      finish({ ...base(name || PROVIDERS.find((p) => p.id === provider)!.name, "link"), url: url.trim() }, events);
+      finish({ ...base(name || (way === "apple" ? "Apple Calendar" : PROVIDERS.find((p) => p.id === provider)!.name), "link"), url: url.trim() }, events);
     } catch (e) {
       toast(e instanceof Error ? e.message : "Couldn't read that calendar.");
       setBusy(false);
@@ -384,7 +375,7 @@ function AddCalendar({ open, onClose, range }: { open: boolean; onClose: () => v
               {google.calendars.filter((c) => c.pick).length === 1 ? "" : "s"}
             </Button>
           )}
-          {way === "link" && (
+          {(way === "link" || way === "apple") && (
             <Button onClick={addLink} disabled={busy || !url.trim() || needsSignIn}>
               {busy ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />} Add calendar
             </Button>
@@ -406,9 +397,10 @@ function AddCalendar({ open, onClose, range }: { open: boolean; onClose: () => v
           }}
           options={[
             { value: "google", label: "Google" },
+            { value: "apple", label: "Apple" },
             { value: "link", label: "Link" },
-            { value: "file", label: ".ics file" },
-            { value: "timetable", label: "PDF / photo" },
+            { value: "file", label: ".ics" },
+            { value: "timetable", label: "PDF" },
           ]}
         />
         {way !== "google" && (
@@ -467,7 +459,7 @@ function AddCalendar({ open, onClose, range }: { open: boolean; onClose: () => v
         )}
         {needsSignIn && (
           <p className="rounded-2xl bg-amber-50 p-3 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
-            Sign in to use {way === "google" ? "Google Calendar" : way === "link" ? "calendar links" : "AI for timetables"} – or use the “.ics file” tab.
+            Sign in to use {way === "google" ? "Google Calendar" : way === "link" || way === "apple" ? "calendar links" : "AI for timetables"} – or use the “.ics” tab.
           </p>
         )}
 
@@ -497,6 +489,37 @@ function AddCalendar({ open, onClose, range }: { open: boolean; onClose: () => v
             </ol>
             <Field label="Calendar link" hint="It stays private: only StudyMaster's server reads it to get your classes.">
               <TextInput value={url} placeholder="https://… or webcal://…" onChange={(e) => setUrl(e.target.value)} />
+            </Field>
+          </div>
+        )}
+
+        {way === "apple" && (
+          <div className="space-y-3 text-sm text-slate-600 dark:text-slate-400">
+            <p>
+              Apple doesn't let other apps sign in to iCloud calendars, so you copy the calendar's link once. StudyMaster then keeps it up to date by
+              itself.
+            </p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl border border-slate-200 p-3 dark:border-slate-800">
+                <p className="mb-1 font-semibold text-slate-800 dark:text-slate-200">On iPhone or iPad</p>
+                <ol className="list-decimal space-y-1 pl-5">
+                  <li>Open Calendar → tap “Calendars” at the bottom.</li>
+                  <li>Tap ⓘ next to your calendar.</li>
+                  <li>Turn on “Public Calendar” → “Share Link…” → Copy.</li>
+                </ol>
+              </div>
+              <div className="rounded-2xl border border-slate-200 p-3 dark:border-slate-800">
+                <p className="mb-1 font-semibold text-slate-800 dark:text-slate-200">On a Mac</p>
+                <ol className="list-decimal space-y-1 pl-5">
+                  <li>Open Calendar, right-click your calendar → “Share Calendar…”.</li>
+                  <li>Tick “Public Calendar” and copy the link.</li>
+                  <li>University calendar you subscribed to? Right-click it → “Get Info” → copy the URL.</li>
+                </ol>
+              </div>
+            </div>
+            <p className="text-xs">A public link isn't listed anywhere – only people who have it can see the calendar.</p>
+            <Field label="Calendar link">
+              <TextInput value={url} placeholder="webcal://p…-caldav.icloud.com/published/…" onChange={(e) => setUrl(e.target.value)} />
             </Field>
           </div>
         )}
