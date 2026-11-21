@@ -21,7 +21,7 @@ import {
   subdeckName,
   subdecks,
 } from "../lib/anki";
-import { readAnki } from "../lib/ankiSync";
+import { readAnki, withCardCounts } from "../lib/ankiSync";
 import { useDevice } from "../lib/device";
 import { newId, todayISO } from "../lib/format";
 import { draftFromAnki, lectureNumber, type Draft } from "../lib/importer";
@@ -403,6 +403,7 @@ export function AnkiCollectionPicker({ onDraft }: { onDraft: (draft: Draft) => v
   const defaultRecording = useStore((s) => s.settings.defaultRecordingMinutes);
   const { connected, names, error, loading, reload } = useAnkiDecks();
   const [chosen, setChosen] = useState<string[]>([]);
+  const [counting, setCounting] = useState(false);
 
   if (!connected) return <ConnectHint what="set up subjects from your Anki decks" />;
   if (error) {
@@ -457,8 +458,21 @@ export function AnkiCollectionPicker({ onDraft }: { onDraft: (draft: Draft) => v
         })}
       </ul>
       <div className="flex flex-wrap gap-2">
-        <Button disabled={chosen.length === 0} onClick={() => onDraft(draftFromAnki(names, chosen, subjects, chunks, todayISO(), defaultRecording))}>
-          Continue with {chosen.length || "the"} deck{chosen.length === 1 ? "" : "s"}
+        <Button
+          disabled={chosen.length === 0 || counting}
+          onClick={async () => {
+            const draft = draftFromAnki(names, chosen, subjects, chunks, todayISO(), defaultRecording);
+            setCounting(true);
+            try {
+              onDraft(await withCardCounts(draft));
+            } catch {
+              onDraft(draft); // counts come with the next read from Anki
+            } finally {
+              setCounting(false);
+            }
+          }}
+        >
+          {counting ? <Loader2 size={16} className="animate-spin" /> : null} Continue with {chosen.length || "the"} deck{chosen.length === 1 ? "" : "s"}
         </Button>
         <Button variant="ghost" onClick={reload}>
           <RefreshCw size={16} /> Refresh

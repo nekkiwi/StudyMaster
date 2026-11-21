@@ -7,7 +7,7 @@ import { useAccount } from "../account";
 import { readTocWithAi } from "../lib/aiImport";
 import { adoptEmptySubject, ankiTarget, applyAiToc, buildDraft, newDraftChunk, swapReader, draftFromToc, mergeChunks, type Draft, type DraftChunk, type DraftSubject } from "../lib/importer";
 import { useStore } from "../store";
-import { AnkiCollectionPicker } from "./ankiConnect";
+import { AnkiCollectionPicker, syncAnki } from "./ankiConnect";
 import { toast } from "./toast";
 import { Badge, Button, cx, Field, Modal, NameInput, NumberInput, Segmented, Select, TextArea, TextInput } from "./ui";
 
@@ -110,6 +110,8 @@ export function ImportDialog({
   const apply = () => {
     if (!draft) return;
     const result = importDraft(draft);
+    // Anki links: read card counts and progress right away (not only on the next refresh).
+    if (draft.subjects.some((s) => s.ankiDeck)) void syncAnki();
     const added = `Added ${result.chunks} item${result.chunks === 1 ? "" : "s"}${result.subjects ? ` and ${result.subjects} new subject${result.subjects === 1 ? "" : "s"}` : ""}`;
     toast(result.chunks || result.subjects ? `${added}.` : "Linked to Anki.", { tone: "success" });
     close();
@@ -491,6 +493,7 @@ function Review({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => voi
                         <span className="min-w-0 truncate">{l.title}</span>
                         <span className="text-slate-400">↔</span>
                         <span className="min-w-0 truncate font-mono text-xs text-slate-500">{leaf(l.deck)}</span>
+                        {l.ankiCards !== undefined && <span className="shrink-0 text-xs text-sky-600">{l.ankiCards} cards</span>}
                       </label>
                     </li>
                   ))}
@@ -536,6 +539,11 @@ function Review({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => voi
                   </div>
                   <div className="flex flex-wrap items-center gap-2 pl-6 text-xs text-slate-500">
                     <span className="min-w-0 basis-full truncate sm:flex-1 sm:basis-auto">{chunk.sources.join(" + ")}</span>
+                    {chunk.ankiCards !== undefined && (
+                      <Badge tone="indigo">
+                        {chunk.ankiCards} card{chunk.ankiCards === 1 ? "" : "s"} in Anki
+                      </Badge>
+                    )}
                     {chunk.note && <Badge tone="amber">{chunk.note}</Badge>}
                     <span className="ml-auto flex shrink-0 items-center gap-2">
                       {i > 0 && (

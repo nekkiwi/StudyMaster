@@ -57,6 +57,38 @@ export function dueQueries(deck: string): string[] {
   return Array.from({ length: FORECAST_DAYS }, (_, i) => (i === 0 ? `${d} is:due` : `${d} prop:due=${i}`));
 }
 
+/** Fills in how many cards each Anki deck of a draft has (one request). */
+export async function withCardCounts<
+  T extends {
+    subjects: {
+      ankiSubdecks?: string[];
+      ankiCounts?: Record<string, number>;
+      chunks: { ankiDeck?: string; ankiCards?: number }[];
+      links?: { deck: string; ankiCards?: number }[];
+    }[];
+  },
+>(draft: T): Promise<T> {
+  const decks = [
+    ...new Set(
+      draft.subjects
+        .flatMap((s) => [...(s.ankiSubdecks ?? []), ...s.chunks.map((c) => c.ankiDeck), ...(s.links ?? []).map((l) => l.deck)])
+        .filter((d): d is string => !!d),
+    ),
+  ];
+  if (decks.length === 0) return draft;
+  const counts = await countCards(decks.map(deckSearch));
+  const of = new Map(decks.map((d, i) => [d, counts[i] ?? 0]));
+  return {
+    ...draft,
+    subjects: draft.subjects.map((s) => ({
+      ...s,
+      ankiCounts: Object.fromEntries((s.ankiSubdecks ?? []).map((d) => [d, of.get(d) ?? 0])),
+      chunks: s.chunks.map((c) => (c.ankiDeck ? { ...c, ankiCards: of.get(c.ankiDeck) } : c)),
+      links: s.links?.map((l) => ({ ...l, ankiCards: of.get(l.deck) })),
+    })),
+  };
+}
+
 /** Reads everything from Anki in two requests. */
 export async function readAnki(subjects: Subject[], chunks: Chunk[], today: ISODate): Promise<AnkiReading> {
   const ids = await ankiDeckIds();

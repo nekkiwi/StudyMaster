@@ -178,6 +178,7 @@ export const useStore = create<Store>()(
               slides: Math.max(0, Math.round(c.slides)),
               order: ++order,
               ...(c.ankiDeck ? { ankiDeck: c.ankiDeck } : {}),
+              ...(c.ankiCards !== undefined ? { ankiCards: c.ankiCards } : {}),
             });
             added++;
           }

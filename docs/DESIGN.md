@@ -167,7 +167,10 @@ once a minute), every 5 minutes while visible, after linking changes, and on
 - **Real card counts:** cards in each item's own deck → `Chunk.ankiCards`.
   The planner counts them as existing cards (reviews), "write cards"
   progress moves to cards found / cards expected (all → watch + read done
-  too; progress never goes back) – `applyAnkiCounts` in core.
+  too; progress never goes back) – `applyAnkiCounts` in core. Items without
+  pages/slides (e.g. just imported from Anki) only keep the count – no
+  progress is guessed. The "From Anki" import reads the counts right away and
+  shows them in the review ("50 cards in Anki").
 - **Real Anki time:** review cards due per subject for today + 6 days
   (`is:due`, `prop:due=N`) → `ankiDue` (synced to the account). The planner
   uses them for those days (plus reviews of cards the plan adds) and keeps

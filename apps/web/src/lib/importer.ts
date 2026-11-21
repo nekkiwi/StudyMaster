@@ -47,6 +47,8 @@ export interface DraftChunk {
   number?: number;
   /** Linked Anki deck (imports from Anki). */
   ankiDeck?: string;
+  /** Cards in that deck right now (imports from Anki). */
+  ankiCards?: number;
 }
 
 /** An existing chapter that will be linked to an Anki deck. */
@@ -55,6 +57,8 @@ export interface DraftLink {
   title: string;
   deck: string;
   include: boolean;
+  /** Cards in that deck right now. */
+  ankiCards?: number;
 }
 
 export interface DraftSubject {
@@ -72,6 +76,8 @@ export interface DraftSubject {
   links?: DraftLink[];
   /** All sub-decks of the linked collection (to rebuild links when the target changes). */
   ankiSubdecks?: string[];
+  /** Cards per sub-deck, read from Anki. */
+  ankiCounts?: Record<string, number>;
   /** Text of the table of contents these chapters came from (for "Let AI read the contents"). */
   tocText?: string;
   /** Last page of the book, if the user entered it (pasted contents). */
@@ -565,7 +571,9 @@ export function ankiTarget(d: DraftSubject, target: Subject | undefined, existin
     ...d,
     existingId: target?.id,
     name: target?.name ?? d.name,
-    links: own.filter((c) => links.has(c.id)).map((c) => ({ chunkId: c.id, title: c.title, deck: links.get(c.id)!, include: true })),
+    links: own
+      .filter((c) => links.has(c.id))
+      .map((c) => ({ chunkId: c.id, title: c.title, deck: links.get(c.id)!, include: true, ankiCards: d.ankiCounts?.[links.get(c.id)!] })),
     chunks: free
       .filter((x) => !linkedDecks.has(x))
       .map((deck) => ({
@@ -579,6 +587,7 @@ export function ankiTarget(d: DraftSubject, target: Subject | undefined, existin
         number: lectureNumber(leaf(deck)),
         note: "add pages or slides",
         ankiDeck: deck,
+        ankiCards: d.ankiCounts?.[deck],
       })),
   };
 }

@@ -76,7 +76,7 @@ export function setCardsMade(chunks: Chunk[], chunkId: string, cards: number): C
 /**
  * Takes the card counts read from Anki (chunkId → cards in its linked deck)
  * into the chunks: stores them, and moves "write cards" forward to the share
- * of the expected cards that exist. Once all expected cards exist, the
+ * of the expected cards that exist (only when pages or slides are known). Once all expected cards exist, the
  * earlier steps (watch, read) count as done too. Progress never goes back.
  * Returns the same array if nothing changed.
  */
@@ -86,7 +86,9 @@ export function applyAnkiCounts(chunks: Chunk[], counts: Record<string, number>,
     const n = counts[chunk.id];
     if (n === undefined) return chunk;
     const expected = chunk.cards ?? guessedCards(chunk, settings);
-    const share = n <= 0 ? 0 : expected <= 0 ? 1 : Math.min(1, n / expected);
+    // Without pages/slides there's nothing to compare with (e.g. a shared
+    // deck imported from Anki) – keep the count, don't guess progress.
+    const share = n <= 0 || expected <= 0 ? 0 : Math.min(1, n / expected);
     const done = { ...chunk.done };
     if (share > (done.cards ?? 0) + 1e-9) done.cards = share > 0.999 ? 1 : share;
     if ((done.cards ?? 0) >= 1) {

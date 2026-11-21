@@ -489,5 +489,8 @@ describe("real numbers from Anki", () => {
     // Nothing new → same array; progress never goes back.
     expect(applyAnkiCounts(out, { "bio-1": 12, "bio-2": 30 }, s)).toBe(out);
     expect(applyAnkiCounts(out, { "bio-1": 3 }, s)[0]!.done?.cards).toBe(0.5);
+    // No pages or slides yet: the count is kept, progress isn't guessed.
+    const bare = { id: "x", subjectId: "bio", title: "L", pages: 0, slides: 0, order: 9 };
+    expect(applyAnkiCounts([bare], { x: 50 }, s)[0]).toMatchObject({ ankiCards: 50, done: {} });
   });
 });
