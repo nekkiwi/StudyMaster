@@ -2,10 +2,10 @@ import { ArrowUpToLine, FileText, FolderOpen, ListTree, Loader2, Upload } from "
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { filesFromDrop, filesFromInput, readFiles, type PickedFile } from "../lib/fileReaders";
 import { todayISO } from "../lib/format";
-import { buildDraft, draftFromToc, mergeChunks, type Draft, type DraftChunk, type DraftSubject } from "../lib/importer";
+import { adoptEmptySubject, buildDraft, draftFromToc, mergeChunks, type Draft, type DraftChunk, type DraftSubject } from "../lib/importer";
 import { useStore } from "../store";
 import { toast } from "./toast";
-import { Badge, Button, cx, Field, Modal, NumberInput, Segmented, Select, TextArea, TextInput } from "./ui";
+import { Badge, Button, cx, Field, Modal, NameInput, NumberInput, Segmented, Select, TextArea, TextInput } from "./ui";
 
 type Stage = { kind: "choose" } | { kind: "reading"; done: number; total: number; name: string } | { kind: "review"; draft: Draft };
 
@@ -31,7 +31,8 @@ export function ImportDialog({ open, onClose, initialDraft }: { open: boolean; o
     if (picked.length === 0) return;
     setStage({ kind: "reading", done: 0, total: picked.length, name: "" });
     const files = await readFiles(picked, (done, total, name) => setStage({ kind: "reading", done, total, name }));
-    setStage({ kind: "review", draft: buildDraft(files, subjects, todayISO()) });
+    const chunks = useStore.getState().chunks;
+    setStage({ kind: "review", draft: adoptEmptySubject(buildDraft(files, subjects, todayISO()), subjects, chunks) });
   };
 
   const draft = stage.kind === "review" ? stage.draft : undefined;
@@ -187,7 +188,11 @@ function Choose({ onFiles, onToc }: { onFiles: (files: PickedFile[]) => void; on
           <Button
             disabled={!tocText.trim()}
             onClick={() => {
-              const draft = draftFromToc(tocText, tocSubject, subjects, todayISO(), lastPage || undefined);
+              const draft = adoptEmptySubject(
+                draftFromToc(tocText, tocSubject, subjects, todayISO(), lastPage || undefined),
+                subjects,
+                useStore.getState().chunks,
+              );
               if (draft.subjects.length === 0) toast("No chapters found. Each line needs a page number at the end.");
               else onToc(draft);
             }}
@@ -261,8 +266,8 @@ function Review({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => voi
                 onChange={(e) => setSubject(subject.id, { include: e.target.checked })}
                 className="h-4 w-4 accent-indigo-600"
               />
-              <div className="min-w-0 flex-1">
-                <TextInput value={subject.name} aria-label="Subject name" onChange={(e) => setSubject(subject.id, { name: e.target.value })} />
+              <div className="min-w-0 flex-1 basis-full sm:basis-auto">
+                <NameInput label="Subject name" value={subject.name} onChange={(name) => setSubject(subject.id, { name })} />
               </div>
               <Select
                 className="w-full sm:w-52"

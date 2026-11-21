@@ -103,7 +103,10 @@ export function subjectFromPath(path: string): string {
   return base || "New subject";
 }
 
-const NON_CHAPTER = /^(contents|table of contents|inhalt|inhaltsverzeichnis|index|register|bibliography|references|literatur|literaturverzeichnis|preface|vorwort|foreword|acknowledg|cover|title page|titel|copyright|about the author|glossary|appendix|anhang)/i;
+const NON_CHAPTER = /^(contents|brief contents|detailed contents|table of contents|inhalt|inhaltsverzeichnis|index|subject index|register|bibliography|references|literatur|literaturverzeichnis|preface|vorwort|foreword|geleitwort|acknowledg|danksagung|dedication|widmung|cover|front cover|back cover|half title|title page|titel|impressum|copyright|about the authors?|über die autor|glossary|glossar|appendix|anhang|list of (figures|tables|abbreviations)|abbildungsverzeichnis|tabellenverzeichnis|abkürzungs|abbreviations|answers|lösungen|credits|notes|further reading|endpapers?)/i;
+
+/** "Chapter 3 …", "Kapitel 3", "3 Cells", "3. Cells", "Unit 3" … */
+const NUMBERED_CHAPTER = /^(chapter|chap\.?|kapitel|kap\.?|unit|lesson|lektion|module|modul)?\s*\d{1,3}\b\s*[.:)\-–]?\s*\S/i;
 
 /** Front and back matter is detected but unticked by default. */
 export function looksLikeChapter(title: string): boolean {
@@ -131,6 +134,12 @@ export function chaptersFromOutline(outline: OutlineEntry[], totalPages: number)
     const pages = Math.max(1, end - entry.page + 1);
     out.push({ title: entry.title.trim(), pages, include: looksLikeChapter(entry.title) });
   });
+  // Books with numbered chapters: everything that isn't one (cover, dedication,
+  // preface, …) starts unticked. Nothing is removed – the user can tick it.
+  const numbered = out.filter((c) => NUMBERED_CHAPTER.test(c.title));
+  if (numbered.length >= 3) {
+    for (const c of out) c.include = c.include && NUMBERED_CHAPTER.test(c.title);
+  }
   return out;
 }
 
@@ -184,12 +193,34 @@ export function mergeChunks(a: DraftChunk, b: DraftChunk): DraftChunk {
   };
 }
 
+const words = (s: string) => s.toLowerCase().split(/[^\p{L}\p{N}]+/u).filter((w) => w.length >= 4);
+
+/** Same name, one starts with the other, or a shared word ("Campbell Biology" ~ "Biology"). */
 function matchSubject(name: string, existing: Subject[]): Subject | undefined {
   const n = name.toLowerCase();
+  const nw = words(name);
   return (
     existing.find((s) => s.name.toLowerCase() === n) ??
-    existing.find((s) => n.length >= 3 && (s.name.toLowerCase().startsWith(n) || n.startsWith(s.name.toLowerCase())))
+    existing.find((s) => n.length >= 3 && (s.name.toLowerCase().startsWith(n) || n.startsWith(s.name.toLowerCase()))) ??
+    existing.find((s) => words(s.name).some((w) => nw.includes(w)))
   );
+}
+
+/**
+ * When an import finds exactly one new subject and exactly one existing
+ * subject has no material yet (e.g. the one just created in the setup
+ * wizard), it's almost certainly the same subject: add the import to it.
+ */
+export function adoptEmptySubject(draft: Draft, existing: Subject[], chunks: { subjectId: string }[]): Draft {
+  const fresh = draft.subjects.filter((s) => !s.existingId);
+  const empty = existing.filter((s) => !chunks.some((c) => c.subjectId === s.id));
+  if (fresh.length !== 1 || empty.length !== 1) return draft;
+  const target = empty[0]!;
+  if (draft.subjects.some((s) => s.existingId === target.id)) return draft;
+  return {
+    ...draft,
+    subjects: draft.subjects.map((s) => (s === fresh[0] ? { ...s, existingId: target.id, name: target.name || s.name } : s)),
+  };
 }
 
 function fileName(path: string): string {

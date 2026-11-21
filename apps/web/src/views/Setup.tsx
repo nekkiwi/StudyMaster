@@ -6,7 +6,7 @@ import { useAccount } from "../account";
 import { SignInForm } from "../components/account";
 import { ImportDialog } from "../components/importer";
 import { ChunkList, SubjectFields } from "../components/subjectForm";
-import { Badge, Button, Card, cx, SubjectDot } from "../components/ui";
+import { Badge, Button, Card, NameInput, SubjectDot, cx } from "../components/ui";
 import { nextColor } from "../lib/colors";
 import { formatHours, formatShort, newId, todayISO } from "../lib/format";
 import { useStore } from "../store";
@@ -39,12 +39,17 @@ export function Setup() {
     return <Welcome onStart={() => setStep(0)} onDemo={loadDemo} />;
   }
 
-  const canNext =
+  // Why "Next" is disabled – always shown, never a silent grey button.
+  const blocker =
     step === 0
-      ? subjects.length > 0 && subjects.every((s) => s.name.trim())
-      : step === 1
-        ? subjects.every((s) => chunks.some((c) => c.subjectId === s.id))
-        : true;
+      ? subjects.length === 0
+        ? "Add at least one subject."
+        : subjects.some((s) => !s.name.trim())
+          ? "Give every subject a name."
+          : null
+      : step === 1 && chunks.length === 0
+        ? "Add some material first – import files or add a lecture."
+        : null;
 
   return (
     <div className="mx-auto flex min-h-dvh max-w-3xl flex-col px-4 py-6 sm:py-10">
@@ -71,14 +76,18 @@ export function Setup() {
         {step === 4 && <SummaryStep />}
       </div>
 
+      {blocker && <p className="mt-6 text-center text-sm text-slate-500 sm:hidden">{blocker}</p>}
       <div className="sticky bottom-0 mt-8 flex items-center justify-between gap-3 border-t border-slate-200 bg-slate-50 py-4 pb-safe dark:border-slate-800 dark:bg-slate-950">
         <Button variant="ghost" onClick={() => setStep(step - 1)}>
           <ArrowLeft size={16} /> Back
         </Button>
         {step < STEPS.length - 1 ? (
-          <Button onClick={() => setStep(step + 1)} disabled={!canNext}>
-            Next <ArrowRight size={16} />
-          </Button>
+          <div className="flex items-center gap-3">
+            {blocker && <span className="hidden text-right text-sm text-slate-500 sm:block">{blocker}</span>}
+            <Button onClick={() => setStep(step + 1)} disabled={!!blocker}>
+              Next <ArrowRight size={16} />
+            </Button>
+          </div>
         ) : (
           <Button variant="success" onClick={finishSetup}>
             <Check size={16} /> Start studying
@@ -234,7 +243,10 @@ function MaterialStep() {
   const chunks = useStore((s) => s.chunks);
   const [active, setActive] = useState(subjects[0]?.id ?? "");
   const [importing, setImporting] = useState(false);
+  const removeSubject = useStore((s) => s.removeSubject);
+  const upsertSubject = useStore((s) => s.upsertSubject);
   const subject = subjects.find((s) => s.id === active) ?? subjects[0];
+  const empty = subjects.filter((s) => !chunks.some((c) => c.subjectId === s.id));
 
   return (
     <div>
@@ -246,6 +258,22 @@ function MaterialStep() {
         <Upload size={16} /> Import slides, PDFs or videos
       </Button>
       <ImportDialog open={importing} onClose={() => setImporting(false)} />
+      {empty.length > 0 && chunks.length > 0 && (
+        <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-500/30 dark:bg-amber-500/10">
+          <p>
+            {empty.map((s) => s.name || "Unnamed subject").join(", ")} {empty.length === 1 ? "has" : "have"} no material yet. Add some, or remove{" "}
+            {empty.length === 1 ? "it" : "them"} if {empty.length === 1 ? "it was" : "they were"} created by mistake. You can also continue and add
+            material later.
+          </p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {empty.map((s) => (
+              <Button key={s.id} size="sm" variant="secondary" onClick={() => removeSubject(s.id)}>
+                <Trash2 size={14} /> Remove {s.name || "unnamed subject"}
+              </Button>
+            ))}
+          </div>
+        </div>
+      )}
       <div className="mb-4 flex flex-wrap gap-2">
         {subjects.map((s) => {
           const count = chunks.filter((c) => c.subjectId === s.id).length;
@@ -265,7 +293,8 @@ function MaterialStep() {
         })}
       </div>
       {subject && (
-        <Card>
+        <Card className="space-y-4">
+          <NameInput label="Subject name" value={subject.name} onChange={(name) => upsertSubject({ ...subject, name })} />
           <ChunkList subject={subject} />
         </Card>
       )}

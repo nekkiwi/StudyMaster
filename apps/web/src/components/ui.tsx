@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { Pencil, X } from "lucide-react";
 import { useEffect, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
@@ -89,6 +89,35 @@ function inputClass(className?: string, extra?: string): string {
 
 export function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className={inputClass(props.className)} />;
+}
+
+/** A big, obviously editable name (subjects): label above, pencil icon inside. */
+export function NameInput({
+  value,
+  onChange,
+  label = "Name",
+  placeholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  label?: string;
+  placeholder?: string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-1 block text-xs font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">{label}</span>
+      <span className="relative block">
+        <input
+          value={value}
+          placeholder={placeholder}
+          aria-label={label}
+          onChange={(e) => onChange(e.target.value)}
+          className={cx(INPUT_BASE, "w-full py-2.5 pr-10 text-base font-semibold")}
+        />
+        <Pencil size={16} className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-slate-400" />
+      </span>
+    </label>
+  );
 }
 
 export function TextArea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {

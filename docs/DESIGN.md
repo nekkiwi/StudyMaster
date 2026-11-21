@@ -54,7 +54,12 @@ human checks:
      existing subjects by name.
    - **Book PDFs** (≥ 30 pages) with bookmarks → one chunk per chapter with
      page counts (top level, or the level below when the top level is just
-     "Part I/II"). Contents, index, references etc. are found but unticked.
+     "Part I/II"). Contents, index, references etc. are found but unticked;
+     when the book has ≥ 3 numbered chapters ("Chapter 3 …", "3 Cells"),
+     every other bookmark (cover, dedication, preface …) starts unticked.
+   - Subjects also match by a shared word ("Campbell Biology" → Biology). If
+     an import finds one new subject and exactly one existing subject has no
+     material yet (e.g. just created in the wizard), it's added to that one.
    - **Slide PDFs** (landscape, or no bookmarks) and **PowerPoints** → one
      lecture each with the slide count; portrait PDFs without bookmarks → pages.
    - **Videos** → recording minutes; paired with slides that share the
@@ -62,7 +67,8 @@ human checks:
    - **Pasted table of contents** → top-level chapters, page count from the
      next chapter's start page (last one from "last page", else estimated
      and flagged).
-3. **Review** (nothing is saved before this): per subject rename, "new
+3. **Review** (nothing is saved before this): per subject rename (big
+   "Subject name ✏️" field), "new
    subject" or "add to <existing>", exam date for new subjects; per item
    tick/untick, edit title, video minutes, pages, slides, "merge with above",
    "move to" another subject. Skipped files are listed with the reason.

@@ -16,7 +16,7 @@ import { formatMinutes, newId } from "../lib/format";
 import { useStore } from "../store";
 import { KIND_ICON, KIND_LABEL } from "./session";
 import { STEP_META } from "./steps";
-import { Button, cx, Field, NumberInput, Segmented, TextArea, TextInput } from "./ui";
+import { Button, Field, NameInput, NumberInput, Segmented, TextArea, TextInput, cx } from "./ui";
 
 export const WEIGHT_LABEL: Record<Weight, string> = {
   0.5: "very easy",
@@ -30,9 +30,7 @@ export function SubjectFields({ subject, onChange }: { subject: Subject; onChang
   return (
     <div className="space-y-4">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-        <Field label="Subject">
-          <TextInput value={subject.name} placeholder="e.g. Biology" onChange={(e) => onChange({ ...subject, name: e.target.value })} />
-        </Field>
+        <NameInput label="Subject name" value={subject.name} placeholder="e.g. Biology" onChange={(name) => onChange({ ...subject, name })} />
         <Field label="Color" group>
           <div className="flex h-10 items-center gap-1.5">
             {SUBJECT_COLORS.map((c) => (
@@ -95,7 +93,7 @@ export function ChunkList({ subject }: { subject: Subject }) {
   return (
     <div>
       <div className="mb-2 flex items-center justify-between text-sm">
-        <span className="font-medium">{chunks.length} chunk{chunks.length === 1 ? "" : "s"}</span>
+        <span className="font-medium whitespace-nowrap">{chunks.length} item{chunks.length === 1 ? "" : "s"}</span>
         <span className="text-slate-500">≈ {formatMinutes(total)} to watch, read and write cards</span>
       </div>
       {chunks.length === 0 && (

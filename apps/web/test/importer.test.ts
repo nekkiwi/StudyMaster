@@ -192,3 +192,41 @@ describe("which Anki deck a task opens", () => {
     expect(deckToOpen(anki([{ subjectId: "bio", title: "L1" }, { subjectId: "bio", title: "L2" }]), subjects)).toBe("Biology");
   });
 });
+
+describe("real-world books", () => {
+  it("unticks cover, dedication, preface etc. when chapters are numbered", () => {
+    const outline = [
+      "Cover", "Half Title", "Title Page", "Copyright", "Dedication", "About the Authors", "Brief Contents",
+      "Detailed Contents", "Preface", "Chapter 1 The Chemistry of Life", "Chapter 2 Cells", "Chapter 3 Genetics",
+      "Chapter 4 Evolution", "Glossary", "Index",
+    ].map((title, i) => ({ title, page: 1 + i * 8, level: 0 }));
+    const chapters = chaptersFromOutline(outline, 130);
+    expect(chapters.filter((c) => c.include).map((c) => c.title)).toEqual([
+      "Chapter 1 The Chemistry of Life",
+      "Chapter 2 Cells",
+      "Chapter 3 Genetics",
+      "Chapter 4 Evolution",
+    ]);
+    expect(chapters).toHaveLength(15); // nothing removed, only unticked
+  });
+
+  it("matches a book's subject to an existing subject by a shared word", () => {
+    const existing = [{ id: "bio", name: "Biology", weight: 1 as const, examDate: "2026-12-20" }];
+    const draft = buildDraft([{ path: "Campbell Biology 12th Edition.pdf", kind: "pdf", pages: 40, landscape: false }], existing, TODAY);
+    expect(draft.subjects[0]).toMatchObject({ existingId: "bio", name: "Biology" });
+  });
+
+  it("adds an import to the one subject that has no material yet", async () => {
+    const { adoptEmptySubject } = await import("../src/lib/importer.js");
+    const existing = [
+      { id: "anat", name: "Anatomy", weight: 1 as const, examDate: "2026-12-20" },
+      { id: "chem", name: "Chemistry", weight: 1 as const, examDate: "2026-12-22" },
+    ];
+    const draft = buildDraft([{ path: "Gray's Textbook.pdf", kind: "pdf", pages: 22, landscape: false }], existing, TODAY);
+    expect(draft.subjects[0]!.existingId).toBeUndefined();
+    const adopted = adoptEmptySubject(draft, existing, [{ subjectId: "chem" }]);
+    expect(adopted.subjects[0]).toMatchObject({ existingId: "anat", name: "Anatomy" });
+    // Two empty subjects: ambiguous, so nothing is guessed.
+    expect(adoptEmptySubject(draft, existing, []).subjects[0]!.existingId).toBeUndefined();
+  });
+});
