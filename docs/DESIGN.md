@@ -135,19 +135,23 @@ AnkiWeb has no public API or "sign in with AnkiWeb", so an Anki account can't
 be used for login or for reading decks on phones.
 
 ### Accounts and sync
-- **No account needed.** Without one, everything stays on the device.
-- **Sign in** (Settings → Account, the sidebar, or "Already have an account?"
-  on the welcome screen): **Google** or **email + password** (with "forgot
-  password" emails). Apple later (needs a $99/year Apple developer account).
+- **The landing page is the login**: "Continue with Google" or email +
+  password (create account, "forgot password" emails). Apple later (needs a
+  $99/year Apple developer account). "Continue without an account" and "Try
+  with example data" are small links below – then everything stays on the
+  device, and sign-in is possible later (sidebar, Settings → Account).
+- After signing in: the account has a plan → straight to Today ("Loading
+  your plan…" meanwhile); new account → the setup wizard.
 - Each user's plan is one Firestore document `users/{uid}` (the app data as a
   JSON string + `updatedAt` + `device`). Rules (`/firestore.rules`): only the
   owner can read or write it; no other fields; < 900 kB.
 - **Sync:** changes upload ~1.5 s after the last edit; other devices get them
   live. Last write wins.
-- **On sign-in:** account empty → this device's plan is uploaded. Same account
-  as before → whichever changed last wins. This device empty → the account's
-  plan is loaded. Both have a plan → the user picks one ("Use my account's
-  plan" / "Keep this device's plan").
+- **On sign-in it's silent – no questions:** account empty → this device's
+  plan is uploaded. Same account as before → whichever changed last wins.
+  Account has a plan → it's loaded; if this device had its own plan (used
+  without an account), that one is kept as a **backup** – Settings → Account
+  offers "Use that plan instead" or "Delete it".
 - **Sign out** removes the plan from the device (shared devices stay private);
   it stays in the account.
 - Per-device settings (e.g. the Anki connection) are never synced.

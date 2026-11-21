@@ -56,7 +56,8 @@ packages/core/   Planning engine. Pure TypeScript, no dependencies, no DOM.
   test/               Vitest tests – add one for every planner change
 apps/web/        React 19 + Vite 6 + Tailwind 4 PWA (zustand for state)
   src/store.ts        All user data, saved to localStorage ("studymaster-v1")
-  src/account.ts      Sign-in state + sync engine (upload, live updates, plan choice)
+  src/account.ts      Sign-in state + silent sync engine (upload, live updates,
+                      account plan wins, device backup)
   src/planner.ts      usePlanner(): computes the plan from the store, handles
                       plan start after check-ins and the approval logic
   src/views/          Today, PlanView (calendar), Subjects, SettingsView, Setup (wizard)
@@ -71,7 +72,7 @@ apps/web/        React 19 + Vite 6 + Tailwind 4 PWA (zustand for state)
                       cloud + firebaseConfig (Firebase, loaded on demand)
   src/components/importer.tsx  Import dialog: choose → read → review → add
   src/components/ankiConnect.tsx  ▶ Anki button logic + Settings "Anki app"
-  src/components/account.tsx  Sign-in dialog, plan choice, account chip/section
+  src/components/account.tsx  Sign-in form (landing page + dialog), account chip/section
 ```
 
 ## How the planner works (short)

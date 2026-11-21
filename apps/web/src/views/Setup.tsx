@@ -1,9 +1,9 @@
 import { addDays, planWithEscalation, type Subject } from "@studymaster/core";
-import { ArrowLeft, ArrowRight, CalendarDays, Check, GraduationCap, Layers, Plus, Sparkles, Trash2, Upload } from "lucide-react";
+import { ArrowLeft, ArrowRight, CalendarDays, Check, GraduationCap, Layers, Loader2, Plus, Sparkles, Trash2, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
 import { BufferSettings, DaysOffEditor, RhythmSettings } from "../components/settingsForm";
 import { useAccount } from "../account";
-import { SignInDialog } from "../components/account";
+import { SignInForm } from "../components/account";
 import { ImportDialog } from "../components/importer";
 import { ChunkList, SubjectFields } from "../components/subjectForm";
 import { Badge, Button, Card, cx, SubjectDot } from "../components/ui";
@@ -20,7 +20,24 @@ export function Setup() {
   const loadDemo = useStore((s) => s.loadDemo);
   const finishSetup = useStore((s) => s.finishSetup);
 
-  if (step < 0) return <Welcome onStart={() => setStep(0)} onDemo={loadDemo} />;
+  const status = useAccount((s) => s.status);
+  const initialSynced = useAccount((s) => s.initialSynced);
+  // Signed in and the account had no plan yet → start the wizard.
+  useEffect(() => {
+    if (status === "signedIn" && initialSynced && step < 0) setStep(0);
+  }, [status, initialSynced, step]);
+
+  if (step < 0) {
+    if (status === "signedIn") {
+      return (
+        <div className="flex min-h-dvh flex-col items-center justify-center gap-3 text-slate-500">
+          <Loader2 className="animate-spin text-indigo-600" size={28} />
+          Loading your plan…
+        </div>
+      );
+    }
+    return <Welcome onStart={() => setStep(0)} onDemo={loadDemo} />;
+  }
 
   const canNext =
     step === 0
@@ -72,55 +89,86 @@ export function Setup() {
   );
 }
 
+const FEATURES: [typeof GraduationCap, string][] = [
+  [GraduationCap, "Main study ends early, with a short review right before each exam"],
+  [Layers, "Every lecture: watch → read → write cards, then study Anki"],
+  [CalendarDays, "A weekly buffer half-day for catching up, free if you don't need it"],
+];
+
+function FeatureList() {
+  return (
+    <ul className="space-y-3 text-slate-700 dark:text-slate-300">
+      {FEATURES.map(([Icon, text]) => (
+        <li key={text} className="flex items-start gap-3">
+          <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
+            <Icon size={16} />
+          </span>
+          {text}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Landing page: sign in first (Google or email); no account is optional. */
 function Welcome({ onStart, onDemo }: { onStart: () => void; onDemo: () => void }) {
   const configured = useAccount((s) => s.configured);
-  const [signIn, setSignIn] = useState(false);
-  return (
-    <div className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center px-6 py-12">
-      <img src="/icon.svg" alt="" className="mb-6 h-16 w-16 rounded-2xl shadow-lg shadow-indigo-500/20" />
+  const intro = (
+    <>
+      <img src="/icon.svg" alt="" className="mb-6 h-14 w-14 rounded-2xl shadow-lg shadow-indigo-500/20" />
       <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Your exams, planned.</h1>
       <p className="mt-3 text-lg text-slate-600 dark:text-slate-400">
-        Tell StudyMaster what you have to learn and when your exams are. It plans every session, including
-        watching lectures, reading, writing and studying Anki cards, and adjusts when life gets in the way.
+        Tell StudyMaster what you have to learn and when your exams are. It plans every session – watching lectures, reading, writing and
+        studying Anki cards – and adjusts when life gets in the way.
       </p>
-      <ul className="mt-8 space-y-3 text-slate-700 dark:text-slate-300">
-        {[
-          [GraduationCap, "Main study ends early, with a short review right before each exam"],
-          [Layers, "Every lecture: watch → read → write cards, then study Anki"],
-          [CalendarDays, "A weekly buffer half-day for catching up, free if you don't need it"],
-        ].map(([Icon, text], i) => {
-          const I = Icon as typeof GraduationCap;
-          return (
-            <li key={i} className="flex items-start gap-3">
-              <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600 dark:bg-indigo-500/10 dark:text-indigo-400">
-                <I size={16} />
-              </span>
-              {text as string}
-            </li>
-          );
-        })}
-      </ul>
-      <div className="mt-10 flex flex-col gap-3 sm:flex-row">
-        <Button size="lg" onClick={onStart}>
-          Set up my plan <ArrowRight size={18} />
-        </Button>
-        <Button size="lg" variant="secondary" onClick={onDemo}>
-          <Sparkles size={18} /> Try with example data
-        </Button>
+    </>
+  );
+
+  if (!configured) {
+    return (
+      <div className="mx-auto flex min-h-dvh max-w-xl flex-col justify-center px-6 py-12">
+        {intro}
+        <div className="mt-8">
+          <FeatureList />
+        </div>
+        <div className="mt-10 flex flex-col gap-3 sm:flex-row">
+          <Button size="lg" onClick={onStart}>
+            Set up my plan <ArrowRight size={18} />
+          </Button>
+          <Button size="lg" variant="secondary" onClick={onDemo}>
+            <Sparkles size={18} /> Try with example data
+          </Button>
+        </div>
       </div>
-      <p className="mt-6 text-sm text-slate-500">
-        Takes about 5 minutes. No account needed – your data stays on this device.
-        {configured && (
-          <>
-            {" "}
-            Already have an account?{" "}
-            <button type="button" className="font-medium text-indigo-600 hover:underline dark:text-indigo-400" onClick={() => setSignIn(true)}>
-              Sign in
-            </button>
-          </>
-        )}
-      </p>
-      <SignInDialog open={signIn} onClose={() => setSignIn(false)} />
+    );
+  }
+
+  return (
+    <div className="mx-auto grid min-h-dvh max-w-5xl grid-cols-1 items-center gap-10 px-6 py-10 lg:grid-cols-[1fr_420px] lg:gap-16">
+      <div>
+        {intro}
+        <div className="mt-8 hidden lg:block">
+          <FeatureList />
+        </div>
+      </div>
+      <div>
+        <Card className="p-5 sm:p-6">
+          <h2 className="mb-1 text-lg font-semibold">Sign in to start</h2>
+          <p className="mb-5 text-sm text-slate-500 dark:text-slate-400">Same account on phone and laptop – your plan is simply there.</p>
+          <SignInForm />
+        </Card>
+        <div className="mt-4 flex flex-wrap justify-center gap-x-5 gap-y-2 text-sm">
+          <button type="button" className="text-slate-600 hover:underline dark:text-slate-400" onClick={onStart}>
+            Continue without an account
+          </button>
+          <button type="button" className="inline-flex items-center gap-1 text-slate-600 hover:underline dark:text-slate-400" onClick={onDemo}>
+            <Sparkles size={14} /> Try with example data
+          </button>
+        </div>
+      </div>
+      <div className="lg:hidden">
+        <FeatureList />
+      </div>
     </div>
   );
 }

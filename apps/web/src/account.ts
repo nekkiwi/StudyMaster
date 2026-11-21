@@ -4,8 +4,10 @@
  * - The app works without an account (data on this device only).
  * - Signing in (Google or email + password) stores the plan in the user's
  *   own Firestore document and keeps every device in sync (last write wins).
- * - On a device that already has a plan, signing in into an account that
- *   also has one asks which plan to keep.
+ * - Signing in is silent: if the account has a plan, it's loaded. A plan
+ *   this device had before (used without an account) is kept as a backup
+ *   that can be restored in Settings. If the account is empty, this
+ *   device's plan is uploaded.
  * - Signing out removes the plan from this device (shared devices stay private).
  */
 import { create } from "zustand";
@@ -24,6 +26,7 @@ import { isCloudConfigured } from "./lib/firebaseConfig";
 import { exportData, useStore, type AppData } from "./store";
 
 const META_KEY = "studymaster-sync";
+const BACKUP_KEY = "studymaster-backup";
 const DEVICE_KEY = "studymaster-device-id";
 const UPLOAD_DELAY = 1500;
 
@@ -64,15 +67,43 @@ function deviceId(): string {
 
 export type SyncState = "off" | "syncing" | "synced" | "offline";
 
+/** A plan this device had before signing in, replaced by the account's plan. */
+export interface DeviceBackup {
+  savedAt: number;
+  data: AppData;
+}
+
+export function readBackup(): DeviceBackup | null {
+  try {
+    const raw = localStorage.getItem(BACKUP_KEY);
+    return raw ? (JSON.parse(raw) as DeviceBackup) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeBackup(data: AppData | null): void {
+  try {
+    if (data) localStorage.setItem(BACKUP_KEY, JSON.stringify({ savedAt: Date.now(), data }));
+    else localStorage.removeItem(BACKUP_KEY);
+  } catch {
+    /* ignore */
+  }
+  useAccount.setState({ hasBackup: !!data });
+}
+
 interface AccountState {
   configured: boolean;
   status: "idle" | "loading" | "signedOut" | "signedIn";
   user?: CloudUser;
   sync: SyncState;
-  /** Both this device and the account have a plan: the user picks one. */
-  choice?: { remote: RemotePlan; local: AppData };
+  /** The first sync after signing in is done (the account's plan is here). */
+  initialSynced: boolean;
+  /** This device's plan from before signing in is kept and can be restored. */
+  hasBackup: boolean;
   start(): Promise<void>;
-  resolveChoice(keep: "account" | "device"): Promise<void>;
+  restoreBackup(): Promise<void>;
+  dismissBackup(): void;
   signOut(): Promise<void>;
 }
 
@@ -85,6 +116,8 @@ export const useAccount = create<AccountState>()((set, get) => ({
   configured: isCloudConfigured,
   status: "idle",
   sync: "off",
+  initialSynced: false,
+  hasBackup: !!readBackup(),
 
   start: () => {
     if (!isCloudConfigured) return Promise.resolve();
@@ -97,15 +130,18 @@ export const useAccount = create<AccountState>()((set, get) => ({
     return started;
   },
 
-  resolveChoice: async (keep) => {
-    const { choice, user } = get();
-    if (!choice || !user) return;
-    set({ choice: undefined });
-    if (keep === "account") applyRemote(choice.remote);
-    else await upload(user.uid);
-    writeMeta({ ...readMeta(), owner: user.uid });
-    await startWatching(user.uid);
+  restoreBackup: async () => {
+    const backup = readBackup();
+    const { user } = get();
+    if (!backup) return;
+    applyingRemote = true;
+    useStore.getState().importData(backup.data);
+    applyingRemote = false;
+    writeBackup(null);
+    if (user) await upload(user.uid);
   },
+
+  dismissBackup: () => writeBackup(null),
 
   signOut: async () => {
     unwatch?.();
@@ -116,7 +152,8 @@ export const useAccount = create<AccountState>()((set, get) => ({
     useStore.getState().reset();
     applyingRemote = false;
     writeMeta({});
-    set({ status: "signedOut", user: undefined, sync: "off", choice: undefined });
+    writeBackup(null);
+    set({ status: "signedOut", user: undefined, sync: "off", initialSynced: false });
   },
 }));
 
@@ -125,10 +162,10 @@ async function handleUser(user: CloudUser | null): Promise<void> {
   if (!user) {
     unwatch?.();
     unwatch = undefined;
-    set({ status: "signedOut", user: undefined, sync: "off" });
+    set({ status: "signedOut", user: undefined, sync: "off", initialSynced: false });
     return;
   }
-  set({ status: "signedIn", user, sync: "syncing" });
+  set({ status: "signedIn", user, sync: "syncing", initialSynced: false });
   try {
     const remote = await readPlan(user.uid);
     const local = exportData();
@@ -142,17 +179,18 @@ async function handleUser(user: CloudUser | null): Promise<void> {
       // Same account as before: keep whichever changed last.
       if ((meta.localAt ?? 0) > remote.updatedAt) await upload(user.uid);
       else applyRemote(remote);
-    } else if (!hasLocalPlan) {
+    } else {
+      // The account's plan wins. Keep this device's own plan as a backup.
+      if (hasLocalPlan) writeBackup(local);
       applyRemote(remote);
       writeMeta({ ...readMeta(), owner: user.uid });
-    } else {
-      set({ choice: { remote, local }, sync: "syncing" });
-      return; // wait for resolveChoice
     }
     await startWatching(user.uid);
   } catch (e) {
     console.warn("Sync failed", errorMessage(e));
     set({ sync: "offline" });
+  } finally {
+    set({ initialSynced: true });
   }
 }
 
@@ -187,8 +225,8 @@ const DATA_KEYS = ["setupDone", "startDate", "subjects", "chunks", "blocked", "s
 useStore.subscribe((state, prev) => {
   if (applyingRemote || !DATA_KEYS.some((k) => state[k] !== prev[k])) return;
   writeMeta({ ...readMeta(), localAt: Date.now() });
-  const { status, user, choice } = useAccount.getState();
-  if (status !== "signedIn" || !user || choice) return;
+  const { status, user, initialSynced } = useAccount.getState();
+  if (status !== "signedIn" || !user || !initialSynced) return;
   useAccount.setState({ sync: "syncing" });
   clearTimeout(uploadTimer);
   uploadTimer = setTimeout(() => {

@@ -2,7 +2,7 @@ import { diffPlans, type Plan } from "@studymaster/core";
 import { BookMarked, CalendarDays, Home, Settings as SettingsIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useAccount, wasSignedIn } from "./account";
-import { AccountChip, PlanChoiceDialog, SignInDialog } from "./components/account";
+import { AccountChip, SignInDialog } from "./components/account";
 import { toast, Toaster } from "./components/toast";
 import { cx } from "./components/ui";
 import { formatShort } from "./lib/format";
@@ -74,7 +74,6 @@ export default function App() {
   return (
     <>
       {setupDone ? <Main /> : <Setup />}
-      <PlanChoiceDialog />
       {!setupDone && <Toaster />}
     </>
   );

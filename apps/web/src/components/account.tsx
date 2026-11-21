@@ -3,7 +3,6 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useAccount, type SyncState } from "../account";
 import { createAccount, errorMessage, sendReset, signInWithApple, signInWithEmail, signInWithGoogle } from "../lib/cloud";
 import { appleSignInEnabled } from "../lib/firebaseConfig";
-import { formatShort } from "../lib/format";
 import { toast } from "./toast";
 import { Button, cx, Field, Modal, TextInput } from "./ui";
 
@@ -26,10 +25,12 @@ function AppleLogo() {
   );
 }
 
-/** Sign in with Google, Apple (when enabled) or email + password; create an account; reset the password. */
-export function SignInDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+/**
+ * Google, Apple (when enabled) or email + password; create an account;
+ * reset the password. Used on the landing page and in the sign-in dialog.
+ */
+export function SignInForm({ intro }: { intro?: string }) {
   const start = useAccount((s) => s.start);
-  const status = useAccount((s) => s.status);
   const [mode, setMode] = useState<"signIn" | "create">("signIn");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -37,16 +38,8 @@ export function SignInDialog({ open, onClose }: { open: boolean; onClose: () => 
   const [error, setError] = useState("");
 
   useEffect(() => {
-    if (open) void start();
-  }, [open, start]);
-
-  // Close as soon as the sign-in went through.
-  useEffect(() => {
-    if (open && status === "signedIn") {
-      toast("Signed in. Your plan now syncs across your devices.", { tone: "success" });
-      onClose();
-    }
-  }, [open, status, onClose]);
+    void start();
+  }, [start]);
 
   const attempt = async (what: NonNullable<typeof busy>, fn: () => Promise<void>) => {
     setBusy(what);
@@ -77,86 +70,73 @@ export function SignInDialog({ open, onClose }: { open: boolean; onClose: () => 
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={mode === "create" ? "Create your account" : "Sign in"}>
-      <div className="space-y-5">
-        <p className="text-sm text-slate-600 dark:text-slate-400">
-          With an account your plan is saved online and stays in sync on your phone and laptop.
-        </p>
-        <Button variant="secondary" size="lg" className="w-full" onClick={() => void attempt("google", signInWithGoogle)} disabled={!!busy}>
-          {busy === "google" ? <Loader2 size={18} className="animate-spin" /> : <GoogleLogo />} Continue with Google
+    <div className="space-y-5">
+      {intro && <p className="text-sm text-slate-600 dark:text-slate-400">{intro}</p>}
+      <Button variant="secondary" size="lg" className="w-full" onClick={() => void attempt("google", signInWithGoogle)} disabled={!!busy}>
+        {busy === "google" ? <Loader2 size={18} className="animate-spin" /> : <GoogleLogo />} Continue with Google
+      </Button>
+      {appleSignInEnabled && (
+        <Button variant="black" size="lg" className="w-full" onClick={() => void attempt("apple", signInWithApple)} disabled={!!busy}>
+          {busy === "apple" ? <Loader2 size={18} className="animate-spin" /> : <AppleLogo />} Continue with Apple
         </Button>
-        {appleSignInEnabled && (
-          <Button variant="black" size="lg" className="w-full" onClick={() => void attempt("apple", signInWithApple)} disabled={!!busy}>
-            {busy === "apple" ? <Loader2 size={18} className="animate-spin" /> : <AppleLogo />} Continue with Apple
-          </Button>
-        )}
-        <div className="flex items-center gap-3 text-xs text-slate-400">
-          <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" /> or with email <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
-        </div>
-        <form className="space-y-3" onSubmit={submit}>
-          <Field label="Email">
-            <TextInput type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
-          </Field>
-          <Field label="Password" hint={mode === "create" ? "At least 6 characters." : undefined}>
-            <TextInput
-              type="password"
-              autoComplete={mode === "create" ? "new-password" : "current-password"}
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </Field>
-          {error && <p className="text-sm text-rose-600 dark:text-rose-400" role="alert">{error}</p>}
-          <Button type="submit" size="lg" className="w-full" disabled={!!busy}>
-            {busy === "email" && <Loader2 size={18} className="animate-spin" />}
-            {mode === "create" ? "Create account" : "Sign in"}
-          </Button>
-        </form>
-        <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
-          <button type="button" className="font-medium text-indigo-600 hover:underline dark:text-indigo-400" onClick={() => { setMode(mode === "create" ? "signIn" : "create"); setError(""); }}>
-            {mode === "create" ? "I already have an account" : "New here? Create an account"}
-          </button>
-          {mode === "signIn" && (
-            <button type="button" className="text-slate-500 hover:underline" onClick={reset} disabled={!!busy}>
-              Forgot password?
-            </button>
-          )}
-        </div>
+      )}
+      <div className="flex items-center gap-3 text-xs text-slate-400">
+        <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" /> or with email <span className="h-px flex-1 bg-slate-200 dark:bg-slate-700" />
       </div>
-    </Modal>
+      <form className="space-y-3" onSubmit={submit}>
+        <Field label="Email">
+          <TextInput type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
+        </Field>
+        <Field label="Password" hint={mode === "create" ? "At least 6 characters." : undefined}>
+          <TextInput
+            type="password"
+            autoComplete={mode === "create" ? "new-password" : "current-password"}
+            required
+            minLength={6}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
+        </Field>
+        {error && <p className="text-sm text-rose-600 dark:text-rose-400" role="alert">{error}</p>}
+        <Button type="submit" size="lg" className="w-full" disabled={!!busy}>
+          {busy === "email" && <Loader2 size={18} className="animate-spin" />}
+          {mode === "create" ? "Create account" : "Sign in"}
+        </Button>
+      </form>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-sm">
+        <button
+          type="button"
+          className="font-medium text-indigo-600 hover:underline dark:text-indigo-400"
+          onClick={() => {
+            setMode(mode === "create" ? "signIn" : "create");
+            setError("");
+          }}
+        >
+          {mode === "create" ? "I already have an account" : "New here? Create an account"}
+        </button>
+        {mode === "signIn" && (
+          <button type="button" className="text-slate-500 hover:underline" onClick={reset} disabled={!!busy}>
+            Forgot password?
+          </button>
+        )}
+      </div>
+    </div>
   );
 }
 
-/** Asked once when this device and the account both have a plan. */
-export function PlanChoiceDialog() {
-  const choice = useAccount((s) => s.choice);
-  const resolve = useAccount((s) => s.resolveChoice);
-  if (!choice) return null;
-  const count = (d: { subjects?: unknown[]; chunks?: unknown[] }) => `${d.subjects?.length ?? 0} subjects, ${d.chunks?.length ?? 0} items`;
+/** The sign-in form in a dialog (sidebar, Settings). */
+export function SignInDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const status = useAccount((s) => s.status);
+  // Close as soon as the sign-in went through.
+  useEffect(() => {
+    if (open && status === "signedIn") {
+      toast("Signed in. Your plan now syncs across your devices.", { tone: "success" });
+      onClose();
+    }
+  }, [open, status, onClose]);
   return (
-    <Modal open onClose={() => void resolve("account")} title="Which plan do you want to keep?">
-      <div className="space-y-4">
-        <p className="text-sm text-slate-600 dark:text-slate-400">This device has a plan, and your account has one too. The other one will be replaced.</p>
-        <button
-          type="button"
-          onClick={() => void resolve("account")}
-          className="w-full rounded-2xl border border-indigo-200 bg-indigo-50 p-4 text-left hover:border-indigo-400 dark:border-indigo-500/30 dark:bg-indigo-500/10"
-        >
-          <p className="font-semibold">Use my account's plan</p>
-          <p className="text-sm text-slate-600 dark:text-slate-400">
-            {count(choice.remote.data)} · saved {formatShort(new Date(choice.remote.updatedAt).toISOString().slice(0, 10))}
-          </p>
-        </button>
-        <button
-          type="button"
-          onClick={() => void resolve("device")}
-          className="w-full rounded-2xl border border-slate-200 p-4 text-left hover:border-slate-400 dark:border-slate-700"
-        >
-          <p className="font-semibold">Keep this device's plan</p>
-          <p className="text-sm text-slate-600 dark:text-slate-400">{count(choice.local)} · replaces the plan in your account</p>
-        </button>
-      </div>
+    <Modal open={open} onClose={onClose} title="Sign in">
+      {open && <SignInForm intro="With an account your plan is saved online and stays in sync on your phone and laptop." />}
     </Modal>
   );
 }
@@ -209,7 +189,7 @@ function Avatar({ user }: { user: { name: string | null; email: string | null; p
 
 /** Settings → Account. */
 export function AccountSection() {
-  const { configured, status, user, sync, signOut } = useAccount();
+  const { configured, status, user, sync, signOut, hasBackup, restoreBackup, dismissBackup } = useAccount();
   const [open, setOpen] = useState(false);
   const [confirm, setConfirm] = useState(false);
   if (!configured) {
@@ -241,6 +221,19 @@ export function AccountSection() {
       <p className="flex items-center gap-1.5 text-sm text-slate-600 dark:text-slate-400">
         <s.icon size={15} className={cx(sync === "syncing" && "animate-spin")} /> {s.text}
       </p>
+      {hasBackup && (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-sm dark:border-amber-500/30 dark:bg-amber-500/10">
+          <p>This device had its own plan before you signed in. Your account's plan is shown now; the old one is kept here.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Button size="sm" variant="secondary" onClick={() => void restoreBackup().then(() => toast("This device's earlier plan is back.", { tone: "success" }))}>
+              Use that plan instead
+            </Button>
+            <Button size="sm" variant="ghost" onClick={dismissBackup}>
+              Delete it
+            </Button>
+          </div>
+        </div>
+      )}
       {confirm ? (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-sm text-slate-600 dark:text-slate-400">Your plan stays in your account but is removed from this device.</span>
