@@ -445,3 +445,49 @@ describe("approval limit", () => {
     expect(capped.plan.subjects[0]!.deficitMinutes).toBe(96);
   });
 });
+
+describe("real numbers from Anki", () => {
+  const reviewOf = (plan: ReturnType<typeof planOnce>, date: string) =>
+    plan.sessions.filter((x) => x.date === date).flatMap((x) => x.items).find((i) => i.kind === "anki")!.anki!.reviewMinutes;
+
+  it("plans review time from the due counts Anki reports", () => {
+    const st = state([subject("bio", "2026-12-20")], chunks("bio", 6));
+    const estimated = planOnce(st, MON, normal);
+    // 300 due cards × 8 s = 40 min, over 2 sessions = 20 min each.
+    const real = planOnce({ ...st, ankiDue: { bio: { [MON]: 300 } } }, MON, normal);
+    expect(reviewOf(real, MON)).toBe(20);
+    expect(reviewOf(estimated, MON)).toBeLessThan(20);
+    // Days without a number from Anki are still estimated.
+    expect(reviewOf(real, addDays(MON, 10))).toBe(reviewOf(estimated, addDays(MON, 10)));
+  });
+
+  it("keeps estimating subjects without numbers from Anki", () => {
+    const st = state([subject("bio", "2026-12-20"), subject("chem", "2026-12-22")], [...chunks("bio", 4), ...chunks("chem", 4)]);
+    const withCards = { ...st, chunks: st.chunks.map((c) => ({ ...c, ankiCards: 200 })) };
+    const both = planOnce(withCards, MON, normal);
+    // Bio's due count is known (0 today), chem is still estimated → still review time.
+    const bioOnly = planOnce({ ...withCards, ankiDue: { bio: { [MON]: 0 } } }, MON, normal);
+    expect(reviewOf(bioOnly, MON)).toBeGreaterThan(0);
+    expect(reviewOf(bioOnly, MON)).toBeLessThanOrEqual(reviewOf(both, MON));
+  });
+
+  it("counts cards that exist in Anki as made", () => {
+    const st = state([subject("bio", "2026-12-20")], chunks("bio", 6));
+    const withCards = { ...st, chunks: st.chunks.map((c) => ({ ...c, ankiCards: 400 })) };
+    expect(reviewOf(planOnce(withCards, MON, normal), MON)).toBeGreaterThan(reviewOf(planOnce(st, MON, normal), MON));
+  });
+
+  it("moves 'write cards' forward from the cards in Anki", async () => {
+    const { applyAnkiCounts } = await import("../src/checkin.js");
+    const s = withDefaults({});
+    const [a, b, c] = chunks("bio", 3, 16); // 16 pages → 24 expected cards
+    const out = applyAnkiCounts([a!, b!, c!], { "bio-1": 12, "bio-2": 30 }, s);
+    expect(out[0]).toMatchObject({ ankiCards: 12, done: { cards: 0.5 } });
+    expect(out[0]!.done?.read).toBeUndefined();
+    expect(out[1]).toMatchObject({ ankiCards: 30, done: { cards: 1, read: 1, watch: 1 } });
+    expect(out[2]).toBe(c);
+    // Nothing new → same array; progress never goes back.
+    expect(applyAnkiCounts(out, { "bio-1": 12, "bio-2": 30 }, s)).toBe(out);
+    expect(applyAnkiCounts(out, { "bio-1": 3 }, s)[0]!.done?.cards).toBe(0.5);
+  });
+});

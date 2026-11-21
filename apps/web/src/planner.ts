@@ -45,12 +45,24 @@ export function planStart(data: Pick<AppData, "checkIns" | "startDate">, today: 
   return from;
 }
 
+/** Due counts from Anki, without days that are already over. */
+function currentDue(due: AppData["ankiDue"], today: ISODate): StudyState["ankiDue"] {
+  if (!due) return undefined;
+  const out: NonNullable<StudyState["ankiDue"]> = {};
+  for (const [id, days] of Object.entries(due)) {
+    const kept = Object.fromEntries(Object.entries(days).filter(([d]) => d >= today));
+    if (Object.keys(kept).length) out[id] = kept;
+  }
+  return out;
+}
+
 export function computePlanner(data: AppData, today: ISODate): Planner {
   const state: StudyState = {
     subjects: data.subjects,
     chunks: data.chunks,
     blocked: data.blocked,
     settings: data.settings,
+    ankiDue: currentDue(data.ankiDue, today),
   };
   const from = planStart(data, today);
   const full = planWithEscalation(state, from);
@@ -110,16 +122,17 @@ export function usePlanner(): Planner {
   const approval = useStore((s) => s.approval);
   const declinedKey = useStore((s) => s.declinedKey);
   const startDate = useStore((s) => s.startDate);
+  const ankiDue = useStore((s) => s.ankiDue);
 
   return useMemo(
     () =>
       computePlanner(
         {
-          subjects, chunks, blocked, settings, checkIns, approval, declinedKey, startDate,
+          subjects, chunks, blocked, settings, checkIns, approval, declinedKey, startDate, ankiDue,
           setupDone: true, checkInTime: "",
         },
         today,
       ),
-    [subjects, chunks, blocked, settings, checkIns, approval, declinedKey, startDate, today],
+    [subjects, chunks, blocked, settings, checkIns, approval, declinedKey, startDate, ankiDue, today],
   );
 }

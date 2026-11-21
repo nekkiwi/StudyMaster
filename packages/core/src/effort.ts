@@ -68,11 +68,19 @@ export function itemCost(item: PlanItem): number {
   return item.minutes + item.learnMinutes;
 }
 
-/** Estimated Anki cards for a chunk (or the real count once entered). */
-export function estimatedCards(chunk: Chunk, settings: Settings): number {
-  if (chunk.cards !== undefined) return chunk.cards;
+/** Cards a chunk should get, from pages and slides only. */
+export function guessedCards(chunk: Chunk, settings: Settings): number {
   const r = settings.rates;
   return Math.round(chunk.pages * r.cardsPerPage + chunk.slides * r.cardsPerSlide);
+}
+
+/**
+ * Anki cards for a chunk: the count entered by hand, else the guess – or
+ * more, if Anki already has more cards in the linked deck.
+ */
+export function estimatedCards(chunk: Chunk, settings: Settings): number {
+  if (chunk.cards !== undefined) return chunk.cards;
+  return Math.max(guessedCards(chunk, settings), chunk.ankiCards ?? 0);
 }
 
 /** Full effort per step in minutes. Reading and writing cards include the subject weight. */
@@ -104,8 +112,9 @@ export function remainingMinutes(chunk: Chunk, subject: Subject, settings: Setti
   return STEPS.reduce((sum, k) => sum + s[k] * (1 - doneFraction(chunk, k)), 0);
 }
 
-/** Anki cards that already exist for this chunk. */
+/** Anki cards that already exist for this chunk (the real count from Anki if known). */
 export function cardsMade(chunk: Chunk, settings: Settings): number {
+  if (chunk.ankiCards !== undefined) return chunk.ankiCards;
   return estimatedCards(chunk, settings) * doneFraction(chunk, "cards");
 }
 
@@ -216,8 +225,18 @@ export function ankiMinutesPerSession(
   sessionsThatDay: number,
   settings: Settings,
 ): number {
+  return sessionShare(ankiMinutesPerDay(activeCards, settings), sessionsThatDay, settings);
+}
+
+/** A day's review minutes split over its sessions, between the minimum and the max share. */
+export function sessionShare(dayMinutes: number, sessionsThatDay: number, settings: Settings): number {
   const a = settings.anki;
-  const perSession = ankiMinutesPerDay(activeCards, settings) / Math.max(1, sessionsThatDay);
+  const perSession = dayMinutes / Math.max(1, sessionsThatDay);
   const cap = a.maxShareOfSession * settings.sessionMinutes;
   return Math.round(Math.min(cap, Math.max(a.minMinutesPerSession, perSession)));
+}
+
+/** Minutes to review this many due cards. */
+export function dueReviewMinutes(dueCards: number, settings: Settings): number {
+  return (dueCards * settings.anki.secondsPerReview) / 60;
 }

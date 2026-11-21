@@ -1,7 +1,7 @@
 import { addDays, daysBetween, type Subject } from "@studymaster/core";
 import { BookMarked, Brain, Layers, Plus, Trash2, Upload } from "lucide-react";
 import { useState } from "react";
-import { SubjectAnkiLink } from "../components/ankiConnect";
+import { AnkiSuggestions, SubjectAnkiLink } from "../components/ankiConnect";
 import { ImportDialog } from "../components/importer";
 import { ChunkList, SubjectFields, WEIGHT_LABEL } from "../components/subjectForm";
 import { Badge, Button, Card, EmptyState, Modal, SubjectDot } from "../components/ui";
@@ -48,6 +48,7 @@ export function SubjectsView({ planner }: { planner: Planner }) {
         </div>
       </header>
       <ImportDialog open={importing} onClose={() => setImporting(false)} />
+      <AnkiSuggestions />
 
       {progress.length === 0 ? (
         <Card>
@@ -107,6 +108,7 @@ function SubjectEditor({ id, onClose }: { id: string | null; onClose: () => void
   const upsertSubject = useStore((s) => s.upsertSubject);
   const removeSubject = useStore((s) => s.removeSubject);
   const [confirm, setConfirm] = useState(false);
+  const [importing, setImporting] = useState(false);
 
   return (
     <Modal
@@ -143,8 +145,14 @@ function SubjectEditor({ id, onClose }: { id: string | null; onClose: () => void
         <div className="space-y-6">
           <SubjectFields subject={subject} onChange={upsertSubject} />
           <div>
-            <h3 className="mb-2 font-semibold">Material</h3>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <h3 className="font-semibold">Material</h3>
+              <Button variant="secondary" size="sm" onClick={() => setImporting(true)}>
+                <Upload size={14} /> Import slides, PDFs or videos
+              </Button>
+            </div>
             <ChunkList subject={subject} />
+            <ImportDialog open={importing} targetSubjectId={subject.id} onClose={() => setImporting(false)} />
           </div>
           <div>
             <h3 className="mb-1 flex items-center gap-2 font-semibold">

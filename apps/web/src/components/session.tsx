@@ -93,7 +93,7 @@ export function SessionCard({
       <ul className="space-y-1 px-2 py-2">
         {session.items.map((item) =>
           item.kind === "anki" ? (
-            <AnkiRow key={item.chunkId} item={item} subjects={subjects} compact={compact} />
+            <AnkiRow key={item.chunkId} item={item} date={session.date} subjects={subjects} compact={compact} />
           ) : (
             <ChunkRow key={`${item.chunkId}-${item.part}`} item={item} subject={subjects.get(item.subjectId)} compact={compact} />
           ),
@@ -116,17 +116,24 @@ export function SessionCard({
   );
 }
 
-function AnkiRow({ item, subjects, compact }: { item: PlanItem; subjects: Map<string, Subject>; compact?: boolean }) {
+function AnkiRow({ item, date, subjects, compact }: { item: PlanItem; date: string; subjects: Map<string, Subject>; compact?: boolean }) {
   const allChunks = useStore((s) => s.chunks);
+  const ankiDue = useStore((s) => s.ankiDue);
   const chunks = useMemo(() => new Map(allChunks.map((c) => [c.id, c])), [allChunks]);
   const names = deckNames(item, subjects);
   const newCards = item.anki?.newCards ?? 0;
   const openAnki = useOpenAnki();
   const targets = decksToOpen(item, subjects, chunks);
-  const what =
-    newCards > 0
-      ? `Learn ~${newCards} new cards + review ${names.join(", ")}`
-      : `Review ${names.join(", ") || "due cards"}`;
+  // Real due counts from Anki, when known for this day (shared over the day's sessions).
+  const parts = (item.decks ?? [])
+    .map((id) => {
+      const name = subjects.get(id)?.name;
+      const due = ankiDue?.[id]?.[date];
+      return name ? (due !== undefined ? `${name} (${due} due)` : name) : "";
+    })
+    .filter(Boolean);
+  const review = parts.join(", ") || "due cards";
+  const what = newCards > 0 ? `Learn ~${newCards} new cards + review ${review}` : `Review ${review}`;
   const button = "inline-flex max-w-40 items-center gap-1 rounded-lg bg-sky-600 px-2.5 py-1.5 text-xs font-medium text-white hover:bg-sky-500";
   return (
     <li className="flex flex-wrap items-center gap-x-3 gap-y-1.5 rounded-xl px-2 py-1.5">

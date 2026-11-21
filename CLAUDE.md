@@ -69,6 +69,7 @@ apps/web/        React 19 + Vite 6 + Tailwind 4 PWA (zustand for state)
                       fileReaders (browser: pdf.js, fflate, video length),
                       anki (AnkiConnect client, deck names, phone links,
                       deck linking: collections/subdecks/matchDecks),
+                      ankiSync (deck ids/renames, card + due counts from Anki),
                       device (per-device settings, never synced),
                       cloud + firebaseConfig (Firebase, loaded on demand)
   src/components/importer.tsx  Import dialog: choose → read → review → add

@@ -68,16 +68,39 @@ export function ankiDeckNames(): Promise<string[]> {
   return call<string[]>("deckNames");
 }
 
-export async function createAnkiDecks(names: string[]): Promise<number> {
-  const existing = new Set(await ankiDeckNames());
-  const missing = names.filter((n) => !existing.has(n));
-  for (const name of missing) await call<number>("createDeck", { deck: name });
-  return missing.length;
+/** All decks with Anki's ids: { "Biology::Lecture 3": 1712345678901 }. */
+export function ankiDeckIds(): Promise<Record<string, number>> {
+  return call<Record<string, number>>("deckNamesAndIds");
 }
 
-/** Opens Anki desktop's review screen for this deck. */
-export async function openDeckOnDesktop(name: string): Promise<void> {
-  await call<boolean>("guiDeckReview", { name });
+/** Creates the decks that don't exist yet. Returns name → id of the new ones. */
+export async function createAnkiDecks(names: string[]): Promise<Record<string, number>> {
+  const existing = await ankiDeckIds();
+  const created: Record<string, number> = {};
+  for (const name of new Set(names)) {
+    if (existing[name] === undefined) created[name] = await call<number>("createDeck", { deck: name });
+  }
+  return created;
+}
+
+/** How many cards each Anki search finds, in one request. */
+export async function countCards(queries: string[]): Promise<number[]> {
+  if (queries.length === 0) return [];
+  const results = await call<unknown[]>(
+    "multi",
+    { actions: queries.map((query) => ({ action: "findCards", params: { query } })) },
+    20_000,
+  );
+  return results.map((r) => {
+    // Sub-actions answer either with the plain result or { result, error }.
+    const value = r && typeof r === "object" && !Array.isArray(r) && "result" in r ? (r as { result: unknown }).result : r;
+    return Array.isArray(value) ? value.length : 0;
+  });
+}
+
+/** Opens Anki desktop's review screen for this deck. False if Anki has no such deck. */
+export async function openDeckOnDesktop(name: string): Promise<boolean> {
+  return (await call<boolean | null>("guiDeckReview", { name })) !== false;
 }
 
 /** Cards due today per deck (new + learning + review), from AnkiConnect. */
@@ -210,9 +233,23 @@ export function matchDecks(chunks: { id: string; title: string }[], decks: strin
   return out;
 }
 
-/** The deck a chapter's ▶ Anki opens: its link, else "Subject::Title". */
+/** A sub-deck name inside a linked collection: "Bio WS26::Lecture 9". */
+export function subdeckName(collection: string, title: string): string {
+  return `${collection}::${title.replace(/::/g, " – ").replace(/"/g, "'").trim()}`;
+}
+
+/**
+ * The deck a chapter's ▶ Anki opens: its own linked deck; in a linked
+ * subject without an own deck, the subject's deck; else "Subject::Title".
+ */
 export function deckForChunk(chunk: { title: string; ankiDeck?: string }, subject: { name: string; ankiDeck?: string }): string {
-  return chunk.ankiDeck ?? deckName(subject.ankiDeck ?? subject.name, chunk.title);
+  return chunk.ankiDeck ?? subject.ankiDeck ?? deckName(subject.name, chunk.title);
+}
+
+/** The chapter's own deck (not the whole subject's), or undefined. */
+export function ownDeck(chunk: { title: string; ankiDeck?: string }, subject: { name: string; ankiDeck?: string }): string | undefined {
+  if (chunk.ankiDeck) return chunk.ankiDeck;
+  return subject.ankiDeck ? undefined : deckName(subject.name, chunk.title);
 }
 
 /** The deck for a whole subject: its link, else its name. */

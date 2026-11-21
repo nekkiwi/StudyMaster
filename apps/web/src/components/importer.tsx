@@ -21,13 +21,27 @@ export function ImportDialog({
   onClose,
   initialDraft,
   initialMode = "files",
+  targetSubjectId,
 }: {
   open: boolean;
   onClose: () => void;
   initialDraft?: Draft;
   initialMode?: Mode;
+  /** Opened from a subject: what's found goes into that subject (when it's one subject). */
+  targetSubjectId?: string;
 }) {
   const subjects = useStore((s) => s.subjects);
+  const defaultRecording = useStore((s) => s.settings.defaultRecordingMinutes);
+  const target = subjects.find((s) => s.id === targetSubjectId);
+  /** A draft with a single subject goes into the target subject. */
+  const toTarget = (d: Draft): Draft => {
+    const only = d.subjects.length === 1 ? d.subjects[0]! : undefined;
+    if (!target || !only || only.existingId === target.id) return d;
+    const next = only.ankiSubdecks
+      ? ankiTarget(only, target, useStore.getState().chunks, defaultRecording)
+      : { ...only, existingId: target.id, name: target.name };
+    return { ...d, subjects: [next] };
+  };
   const importDraft = useStore((s) => s.importDraft);
   const [stage, setStage] = useState<Stage>({ kind: "choose" });
   // A ready draft (e.g. from Anki decks) goes straight to the review.
@@ -45,7 +59,7 @@ export function ImportDialog({
     setStage({ kind: "reading", done: 0, total: picked.length, name: "" });
     const files = await readFiles(picked, (done, total, name) => setStage({ kind: "reading", done, total, name }));
     const chunks = useStore.getState().chunks;
-    setStage({ kind: "review", draft: adoptEmptySubject(buildDraft(files, subjects, todayISO()), subjects, chunks) });
+    setStage({ kind: "review", draft: toTarget(adoptEmptySubject(buildDraft(files, subjects, todayISO()), subjects, chunks)) });
   };
 
   const draft = stage.kind === "review" ? stage.draft : undefined;
@@ -72,7 +86,7 @@ export function ImportDialog({
     <Modal
       open={open}
       onClose={close}
-      title={stage.kind === "review" ? "Check what was found" : "Import material"}
+      title={stage.kind === "review" ? "Check what was found" : target ? `Import material for ${target.name}` : "Import material"}
       wide
       footer={
         stage.kind === "review" ? (
@@ -87,7 +101,12 @@ export function ImportDialog({
         ) : undefined
       }
     >
-      {stage.kind === "choose" && <Choose initialMode={initialMode} onFiles={read} onToc={(d) => setStage({ kind: "review", draft: d })} />}
+      {stage.kind === "choose" && <Choose
+          initialMode={initialMode}
+          defaultSubject={target?.name}
+          onFiles={read}
+          onToc={(d) => setStage({ kind: "review", draft: toTarget(d) })}
+        />}
       {stage.kind === "reading" && (
         <div className="flex flex-col items-center gap-3 py-12 text-center">
           <Loader2 className="animate-spin text-indigo-600" size={28} />
@@ -103,14 +122,24 @@ export function ImportDialog({
   );
 }
 
-function Choose({ initialMode, onFiles, onToc }: { initialMode: Mode; onFiles: (files: PickedFile[]) => void; onToc: (draft: Draft) => void }) {
+function Choose({
+  initialMode,
+  defaultSubject,
+  onFiles,
+  onToc,
+}: {
+  initialMode: Mode;
+  defaultSubject?: string;
+  onFiles: (files: PickedFile[]) => void;
+  onToc: (draft: Draft) => void;
+}) {
   const subjects = useStore((s) => s.subjects);
   const [mode, setMode] = useState<Mode>(initialMode);
   const [dragging, setDragging] = useState(false);
   const files = useRef<HTMLInputElement>(null);
   const folder = useRef<HTMLInputElement>(null);
   const [tocText, setTocText] = useState("");
-  const [tocSubject, setTocSubject] = useState(subjects[0]?.name ?? "");
+  const [tocSubject, setTocSubject] = useState(defaultSubject ?? subjects[0]?.name ?? "");
   const [lastPage, setLastPage] = useState(0);
 
   const onDrop = async (e: DragEvent) => {

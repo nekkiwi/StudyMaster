@@ -1,5 +1,5 @@
 import { Pencil, X } from "lucide-react";
-import { useEffect, type ButtonHTMLAttributes, type ReactNode } from "react";
+import { useEffect, useRef, type ButtonHTMLAttributes, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 export function cx(...classes: (string | false | null | undefined)[]): string {
@@ -325,6 +325,9 @@ export function ProgressRing({
   );
 }
 
+/** Dialogs currently open, newest last. */
+const openModals: symbol[] = [];
+
 export function Modal({
   open,
   onClose,
@@ -340,17 +343,24 @@ export function Modal({
   footer?: ReactNode;
   wide?: boolean;
 }) {
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    // Escape closes only the top dialog when dialogs are stacked. The order
+    // only changes when a dialog opens or closes, not on re-renders.
+    const id = Symbol();
+    openModals.push(id);
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && openModals[openModals.length - 1] === id && closeRef.current();
     document.addEventListener("keydown", onKey);
     const overflow = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
       document.removeEventListener("keydown", onKey);
+      openModals.splice(openModals.indexOf(id), 1);
       document.body.style.overflow = overflow;
     };
-  }, [open, onClose]);
+  }, [open]);
 
   if (!open) return null;
   // Rendered at the end of <body> so no parent (e.g. a blurred sidebar) can

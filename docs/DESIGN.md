@@ -139,7 +139,32 @@ The real workflow: A) watch → read → write cards, then B) study Anki.
   deck" = no own deck), "Match by name" again, "Add N sub-decks as new items".
   Needs desktop Anki with AnkiConnect; on phones the links are shown only.
 - Without links, deck names default to `Subject::Lecture`
-  (`deckForChunk`, `deckForSubject`).
+  (`deckForChunk`, `deckForSubject`). In a linked subject, an item without
+  its own deck ("Whole subject deck", `ankiNoDeck`) opens the subject's deck.
+
+### Reading Anki's structure and numbers (computer with AnkiConnect)
+`lib/ankiSync.ts` + `syncAnki()` run when StudyMaster opens, on focus (at most
+once a minute), every 5 minutes while visible, after linking changes, and on
+"Refresh" (Settings → Anki). Two requests per run (`deckNamesAndIds`, then one
+`multi` with `findCards` searches):
+- **Links survive renaming:** links store Anki's deck id (`ankiDeckId`); a
+  renamed deck (or parent) updates the stored name. Deck ids are the same on
+  every synced device. Changing a link by hand drops the old id.
+- **Real card counts:** cards in each item's own deck → `Chunk.ankiCards`.
+  The planner counts them as existing cards (reviews), "write cards"
+  progress moves to cards found / cards expected (all → watch + read done
+  too; progress never goes back) – `applyAnkiCounts` in core.
+- **Real Anki time:** review cards due per subject for today + 6 days
+  (`is:due`, `prop:due=N`) → `ankiDue` (synced to the account). The planner
+  uses them for those days (plus reviews of cards the plan adds) and keeps
+  estimating other days and subjects without a deck. The Anki task shows
+  "Biology (87 due)".
+- **Both directions:** a lecture added to a linked subject gets
+  `Collection::Title` in Anki right away (when Anki is reachable); the
+  Subjects page shows "N new sub-decks in Anki → Add as lectures" and "N
+  items without a sub-deck → Create in Anki".
+- Phones can't read Anki; they use the numbers and links last read on a
+  computer (synced with the account). Settings shows "Read from Anki … ago".
 
 ### Connecting to the Anki app
 Each Anki task has an **▶ Anki** button that opens **exactly the linked deck
@@ -288,7 +313,9 @@ Code: `apps/web/src/planner.ts`.
 - **Plan:** week view (desktop 7 columns, phone list), overview heat map from
   this week to the last exam with exam markers, exam list with "main study
   done by", legend. Buffer = striped amber, extra = rose border, day off = grey.
-- **Subjects:** cards with progress, chunks, cards made / estimated; editor
+- **Subjects:** cards with progress, items done, cards made / estimated; the
+  subject editor has its own **Import** (files, table of contents, Anki) that
+  adds to that subject; editor
   with category icon per item, step toggles, real card count, reorder, the
   linked (blue) or default Anki deck name, and an "Anki deck" section to link
   the subject and its items.

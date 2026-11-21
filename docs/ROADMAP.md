@@ -21,6 +21,9 @@
   ▶ Anki opens exactly the linked deck.
 - ✅ ▶ Anki on every device: connect-and-open dialog on computers, Safari
   note, AnkiMobile study link, AnkiDroid deck link.
+- ✅ Anki structure + numbers: deck ids (renames), real card counts, due
+  counts in the plan, sub-decks for new lectures, new sub-decks suggested.
+- ✅ Import inside the subject editor.
 - ⏳ Android: start *studying* the exact deck. Options: propose a
   `anki://x-callback-url/study?deck=` deep link to AnkiDroid (like AnkiMobile),
   or ship StudyMaster as an Android app that sends AnkiDroid's review intent

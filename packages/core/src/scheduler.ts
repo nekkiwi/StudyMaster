@@ -2,7 +2,8 @@ import { addDays, type ISODate } from "./dates.js";
 import {
   ankiItem,
   ankiMinutesPerDay,
-  ankiMinutesPerSession,
+  dueReviewMinutes,
+  sessionShare,
   cardsMade,
   cutItem,
   itemCost,
@@ -157,8 +158,27 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
     b > a ? prefix[b]! - prefix[a]! : 0;
 
   // Step 3: walk the grid in time order.
-  let activeCards = state.chunks.reduce((sum, c) => sum + cardsMade(c, s), 0);
-  let pendingCards = 0;
+  // Cards made per subject (real counts from Anki where known).
+  const made = new Map(subjects.map((x) => [x.id, 0]));
+  for (const c of state.chunks) if (made.has(c.subjectId)) made.set(c.subjectId, made.get(c.subjectId)! + cardsMade(c, s));
+  const startMade = new Map(made);
+  const pending = new Map<string, number>();
+  /**
+   * Review minutes on a date, per subject: the real due count from Anki where
+   * known (plus reviews of the cards this plan adds), else estimated.
+   */
+  const dayReviewMinutes = (date: ISODate) => {
+    let minutes = 0;
+    for (const [id, cards] of made) {
+      const due = state.ankiDue?.[id]?.[date];
+      minutes +=
+        due === undefined
+          ? ankiMinutesPerDay(cards, s)
+          : dueReviewMinutes(due, s) + ankiMinutesPerDay(Math.max(0, cards - startMade.get(id)!), s);
+    }
+    return minutes;
+  };
+  const reviewOnDate = new Map<ISODate, number>();
   let currentDate = "";
   let anki = 0;
   let fillIndex = 0;
@@ -176,10 +196,11 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
   for (const slot of grid) {
     if (slot.date !== currentDate) {
       currentDate = slot.date;
-      activeCards += pendingCards;
-      pendingCards = 0;
-      cardsOnDate.set(slot.date, activeCards);
-      anki = ankiMinutesPerSession(activeCards, sessionsPerDay.get(slot.date) ?? 1, s);
+      for (const [id, n] of pending) made.set(id, made.get(id)! + n);
+      pending.clear();
+      cardsOnDate.set(slot.date, [...made.values()].reduce((a, b) => a + b, 0));
+      reviewOnDate.set(slot.date, dayReviewMinutes(slot.date));
+      anki = sessionShare(reviewOnDate.get(slot.date)!, sessionsPerDay.get(slot.date) ?? 1, s);
     }
     const key = slotKey(slot.date, slot.slot);
     const review = reviews.get(key);
@@ -262,7 +283,7 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
       items.push(item);
       capLeft -= itemCost(item);
       remaining.set(best.id, remaining.get(best.id)! - itemCost(item));
-      pendingCards += item.cards;
+      pending.set(best.id, (pending.get(best.id) ?? 0) + item.cards);
     }
 
     if (items.length > 0) {
@@ -289,10 +310,11 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
     if (slot.kind !== "normal" || busyDays.has(slot.date) || examDays.has(slot.date)) continue;
     busyDays.add(slot.date);
     const cards = cardsOnDate.get(slot.date) ?? 0;
-    if (cards < 1) continue;
+    const review = reviewOnDate.get(slot.date) ?? 0;
+    if (cards < 1 && review < 1) continue;
     const minutes = Math.min(
       s.sessionMinutes * s.anki.maxShareOfSession,
-      Math.max(ANKI_ONLY_MIN_MINUTES, ankiMinutesPerDay(cards, s)),
+      Math.max(ANKI_ONLY_MIN_MINUTES, review),
     );
     sessions.push({ ...slot, type: "anki", items: [ankiItem(slot.slot, decksFor(slot.date), { reviewMinutes: minutes })] });
   }

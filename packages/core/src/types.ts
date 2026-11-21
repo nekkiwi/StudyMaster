@@ -24,6 +24,8 @@ export interface Subject {
   examHalf?: Half;
   /** Linked Anki deck (collection), e.g. "Biology". */
   ankiDeck?: string;
+  /** Anki's id of that deck – stays the same when the deck is renamed. */
+  ankiDeckId?: number;
 }
 
 /**
@@ -51,6 +53,12 @@ export interface Chunk {
   done?: Partial<Record<StepKey, number>>;
   /** Linked Anki deck, e.g. "Biology::Lecture 3 – Genetics". */
   ankiDeck?: string;
+  /** Anki's id of that deck – stays the same when the deck is renamed. */
+  ankiDeckId?: number;
+  /** The user chose "whole subject deck": no own sub-deck in Anki. */
+  ankiNoDeck?: boolean;
+  /** Cards that exist in the linked deck, as last read from Anki. */
+  ankiCards?: number;
 }
 
 export type BlockReason = "vacation" | "sick" | "break" | "other";
@@ -155,6 +163,11 @@ export interface StudyState {
   chunks: Chunk[];
   blocked: BlockedRange[];
   settings: Settings;
+  /**
+   * Review cards due in Anki per subject and date, as read from Anki for the
+   * next days. Subjects and dates without a number are estimated.
+   */
+  ankiDue?: Record<string, Record<ISODate, number>>;
 }
 
 /**

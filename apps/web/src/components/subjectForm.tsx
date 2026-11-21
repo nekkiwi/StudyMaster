@@ -15,7 +15,9 @@ import { parseBulk } from "../lib/bulk";
 import { SUBJECT_COLORS } from "../lib/colors";
 import { formatMinutes, newId } from "../lib/format";
 import { useStore } from "../store";
+import { canTalkToAnki, createMissingDecks } from "./ankiConnect";
 import { KIND_ICON, KIND_LABEL } from "./session";
+import { toast } from "./toast";
 import { STEP_META } from "./steps";
 import { Button, Field, NameInput, NumberInput, Segmented, TextArea, TextInput, cx } from "./ui";
 
@@ -209,6 +211,7 @@ function ChunkRow({
           />
           </span>
           cards
+          {chunk.ankiCards !== undefined && <span className="text-sky-600 dark:text-sky-400">· {chunk.ankiCards} in Anki</span>}
         </label>
         <span className="text-xs text-slate-400">{done ? "done" : `${formatMinutes(left)} left of ${formatMinutes(minutes)}`}</span>
         <span className="ml-auto flex items-center gap-0.5">
@@ -233,6 +236,14 @@ function ChunkRow({
   );
 }
 
+/** New lectures in a subject linked to Anki get their own sub-deck there (when Anki is reachable). */
+function deckForNew(subject: Subject, chunkIds: string[]) {
+  if (!subject.ankiDeck || !canTalkToAnki()) return;
+  createMissingDecks({ chunkIds })
+    .then((n) => n && toast(`Created ${n} sub-deck${n === 1 ? "" : "s"} in Anki.`, { tone: "success" }))
+    .catch(() => toast("Couldn't create the sub-deck in Anki – is Anki open? You can create it later in the Anki deck section."));
+}
+
 function AddChunks({ subject, nextOrder }: { subject: Subject; nextOrder: number }) {
   const addChunks = useStore((s) => s.addChunks);
   const defaultRecording = useStore((s) => s.settings.defaultRecordingMinutes);
@@ -248,7 +259,9 @@ function AddChunks({ subject, nextOrder }: { subject: Subject; nextOrder: number
   const canAddOne = !!title.trim() && (pages > 0 || slides > 0 || recording > 0);
   const addOne = () => {
     if (!canAddOne) return;
-    addChunks([{ id: newId(), subjectId: subject.id, title: title.trim(), recordingMinutes: recording, pages, slides, order: nextOrder }]);
+    const id = newId();
+    addChunks([{ id, subjectId: subject.id, title: title.trim(), recordingMinutes: recording, pages, slides, order: nextOrder }]);
+    deckForNew(subject, [id]);
     setTitle("");
     setPages(0);
     setSlides(0);
@@ -256,15 +269,15 @@ function AddChunks({ subject, nextOrder }: { subject: Subject; nextOrder: number
 
   // Lines without a recording length get the "recording per lecture" value.
   const addMany = () => {
-    addChunks(
-      parsed.chunks.map((c, i) => ({
-        id: newId(),
-        subjectId: subject.id,
-        ...c,
-        recordingMinutes: c.recordingMinutes ?? recording,
-        order: nextOrder + i,
-      })),
-    );
+    const added = parsed.chunks.map((c, i) => ({
+      id: newId(),
+      subjectId: subject.id,
+      ...c,
+      recordingMinutes: c.recordingMinutes ?? recording,
+      order: nextOrder + i,
+    }));
+    addChunks(added);
+    deckForNew(subject, added.map((c) => c.id));
     setText("");
   };
 

@@ -1,4 +1,5 @@
 import {
+  applyAnkiCounts,
   applyResults,
   DEFAULT_SETTINGS,
   withDefaults,
@@ -16,6 +17,7 @@ import { nextColor } from "./lib/colors";
 import { demoData } from "./lib/demo";
 import { newId, todayISO } from "./lib/format";
 import type { Draft } from "./lib/importer";
+import { reconcileDecks, type AnkiReading } from "./lib/ankiSync";
 
 export interface CheckInRecord {
   answer: "yes" | "no";
@@ -44,6 +46,10 @@ export interface AppData {
   declinedKey?: string;
   /** Local time for the evening check-in reminder, "HH:MM". */
   checkInTime: string;
+  /** Review cards due per subject and date, last read from Anki on a computer. */
+  ankiDue?: Record<string, Record<ISODate, number>>;
+  /** When the numbers were last read from Anki (ISO timestamp). */
+  ankiReadAt?: string;
 }
 
 interface Actions {
@@ -66,6 +72,9 @@ interface Actions {
 
   updateSettings(patch: Partial<Settings>): void;
   setCheckInTime(time: string): void;
+
+  /** Takes what was read from Anki: renamed decks, deck ids, card counts, due counts. */
+  applyAnkiReading(reading: AnkiReading): void;
 
   checkIn(date: ISODate, answer: "yes" | "no", results: ItemResult[], record: CheckInRecord["items"]): void;
   undoCheckIn(date: ISODate): void;
@@ -112,7 +121,7 @@ export const useStore = create<Store>()(
       upsertSubject: (subject) =>
         set((s) => ({
           subjects: s.subjects.some((x) => x.id === subject.id)
-            ? s.subjects.map((x) => (x.id === subject.id ? subject : x))
+            ? s.subjects.map((x) => (x.id === subject.id ? relinked(x, subject) : x))
             : [...s.subjects, subject],
         })),
       removeSubject: (id) =>
@@ -124,7 +133,7 @@ export const useStore = create<Store>()(
       upsertChunk: (chunk) =>
         set((s) => ({
           chunks: s.chunks.some((x) => x.id === chunk.id)
-            ? s.chunks.map((x) => (x.id === chunk.id ? chunk : x))
+            ? s.chunks.map((x) => (x.id === chunk.id ? relinked(x, chunk) : x))
             : [...s.chunks, chunk],
         })),
       addChunks: (chunks) => set((s) => ({ chunks: [...s.chunks, ...chunks] })),
@@ -152,11 +161,11 @@ export const useStore = create<Store>()(
             newSubjects++;
           } else if (d.ankiDeck) {
             const i = subjects.findIndex((x) => x.id === subjectId);
-            subjects[i] = { ...subjects[i]!, ankiDeck: d.ankiDeck };
+            subjects[i] = relinked(subjects[i]!, { ...subjects[i]!, ankiDeck: d.ankiDeck });
           }
           for (const l of links) {
             const i = chunks.findIndex((c) => c.id === l.chunkId);
-            if (i >= 0) chunks[i] = { ...chunks[i]!, ankiDeck: l.deck };
+            if (i >= 0) chunks[i] = relinked(chunks[i]!, { ...chunks[i]!, ankiDeck: l.deck, ankiNoDeck: undefined });
           }
           let order = Math.max(0, ...chunks.filter((c) => c.subjectId === subjectId).map((c) => c.order));
           for (const c of picked) {
@@ -200,6 +209,24 @@ export const useStore = create<Store>()(
         })),
       removeBlocked: (id) => set((s) => ({ blocked: s.blocked.filter((x) => x.id !== id) })),
 
+      applyAnkiReading: (reading) =>
+        set((s) => {
+          // Re-apply on the current data: it may have changed while Anki was read.
+          const fixed = reconcileDecks(s.subjects, s.chunks, reading.ids);
+          let chunks = applyAnkiCounts(fixed.chunks, reading.counts, s.settings);
+          // Chapters without an own deck in Anki (any more) have no Anki count.
+          if (chunks.some((c) => c.ankiCards !== undefined && reading.counts[c.id] === undefined)) {
+            chunks = chunks.map((c) => (c.ankiCards !== undefined && reading.counts[c.id] === undefined ? { ...c, ankiCards: undefined } : c));
+          }
+          const sameDue = JSON.stringify(s.ankiDue ?? {}) === JSON.stringify(reading.due);
+          return {
+            ...(fixed.subjects !== s.subjects ? { subjects: fixed.subjects } : {}),
+            ...(chunks !== s.chunks ? { chunks } : {}),
+            ...(sameDue ? {} : { ankiDue: reading.due }),
+            ankiReadAt: new Date().toISOString(),
+          };
+        }),
+
       updateSettings: (patch) => set((s) => ({ settings: withDefaults({ ...s.settings, ...patch }) })),
       setCheckInTime: (time) => set({ checkInTime: time }),
 
@@ -227,8 +254,8 @@ export const useStore = create<Store>()(
       version: 1,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => {
-        const { setupDone, startDate, subjects, chunks, blocked, settings, checkIns, approval, declinedKey, checkInTime } = s;
-        return { setupDone, startDate, subjects, chunks, blocked, settings, checkIns, approval, declinedKey, checkInTime };
+        const { setupDone, startDate, subjects, chunks, blocked, settings, checkIns, approval, declinedKey, checkInTime, ankiDue, ankiReadAt } = s;
+        return { setupDone, startDate, subjects, chunks, blocked, settings, checkIns, approval, declinedKey, checkInTime, ankiDue, ankiReadAt };
       },
       merge: (persisted, current) => {
         const data = (persisted ?? {}) as Partial<AppData>;
@@ -247,6 +274,15 @@ export const useStore = create<Store>()(
 
 export function exportData(): AppData {
   const s = useStore.getState();
-  const { setupDone, startDate, subjects, chunks, blocked, settings, checkIns, approval, declinedKey, checkInTime } = s;
-  return { setupDone, startDate, subjects, chunks, blocked, settings, checkIns, approval, declinedKey, checkInTime };
+  const { setupDone, startDate, subjects, chunks, blocked, settings, checkIns, approval, declinedKey, checkInTime, ankiDue, ankiReadAt } = s;
+  return { setupDone, startDate, subjects, chunks, blocked, settings, checkIns, approval, declinedKey, checkInTime, ankiDue, ankiReadAt };
+}
+
+/**
+ * A changed Anki link forgets the old deck's id and card count, so the next
+ * read from Anki doesn't "rename" it back.
+ */
+function relinked<T extends { ankiDeck?: string; ankiDeckId?: number; ankiCards?: number }>(before: T, after: T): T {
+  if (before.ankiDeck === after.ankiDeck || after.ankiDeckId !== before.ankiDeckId) return after;
+  return { ...after, ankiDeckId: undefined, ankiCards: undefined };
 }

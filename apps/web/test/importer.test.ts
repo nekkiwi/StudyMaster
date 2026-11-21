@@ -224,8 +224,8 @@ describe("which Anki deck a task opens", () => {
       ({ kind: "anki", decks: ["bio"], anki: { newCards: 5, learnMinutes: 3, reviewMinutes: 10, lectures } }) as never;
     const decks = (l: Parameters<typeof anki>[0]) => decksToOpen(anki(l), subjects, chunks).map((x) => x.deck);
     expect(decks([{ chunkId: "c3", subjectId: "bio", title: "Lecture 3" }])).toEqual(["Bio WS26::VL03 Genetics"]);
-    // Not linked: falls back to "Collection::Title".
-    expect(decks([{ chunkId: "c4", subjectId: "bio", title: "Lecture 4" }])).toEqual(["Bio WS26::Lecture 4"]);
+    // No own deck in a linked subject: the subject's deck.
+    expect(decks([{ chunkId: "c4", subjectId: "bio", title: "Lecture 4" }])).toEqual(["Bio WS26"]);
     expect(decks([])).toEqual(["Bio WS26"]);
     expect(decks([{ chunkId: "c3", subjectId: "bio", title: "L3" }, { chunkId: "c4", subjectId: "bio", title: "L4" }])).toHaveLength(2);
   });
