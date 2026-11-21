@@ -1,5 +1,5 @@
 import type { ISODate } from "./dates.js";
-import { guessedCards } from "./effort.js";
+import { guessedCards, workSteps } from "./effort.js";
 import { STEPS, type Chunk, type Plan, type PlanItem, type Settings, type StepKey } from "./types.js";
 
 /** What happened with one planned piece. */
@@ -86,14 +86,19 @@ export function applyAnkiCounts(chunks: Chunk[], counts: Record<string, number>,
     const n = counts[chunk.id];
     if (n === undefined) return chunk;
     const expected = chunk.cards ?? guessedCards(chunk, settings);
-    // Without pages/slides there's nothing to compare with (e.g. a shared
-    // deck imported from Anki) – keep the count, don't guess progress.
-    const share = n <= 0 || expected <= 0 ? 0 : Math.min(1, n / expected);
     const done = { ...chunk.done };
-    if (share > (done.cards ?? 0) + 1e-9) done.cards = share > 0.999 ? 1 : share;
-    if ((done.cards ?? 0) >= 1) {
-      done.watch = 1;
-      done.read = 1;
+    if (n > 0 && expected <= 0) {
+      // No pages/slides to compare with (e.g. a deck imported from Anki): the
+      // cards exist, so making them is done – nothing else is assumed.
+      done.cards = 1;
+    } else {
+      const share = n <= 0 ? 0 : Math.min(1, n / expected);
+      if (share > (done.cards ?? 0) + 1e-9) done.cards = share > 0.999 ? 1 : share;
+      // All cards made → the steps before "make cards" are done too.
+      if ((done.cards ?? 0) >= 1) {
+        const order = workSteps(settings);
+        for (const k of order.slice(0, Math.max(0, order.indexOf("cards")))) done[k] = 1;
+      }
     }
     const same =
       chunk.ankiCards === n && STEPS.every((k) => (chunk.done?.[k] ?? 0) === (done[k] ?? 0));

@@ -7,6 +7,7 @@ import {
   DaysOffEditor,
   RateSettings,
   RhythmSettings,
+  StudyStyleEditor,
   WeekGrid,
   SplittingSettings,
 } from "../components/settingsForm";
@@ -90,6 +91,9 @@ export function SettingsView() {
         <div className="space-y-6">
           <Section title="Account" description="Sign in to keep your plan safe and in sync on all your devices.">
             <AccountSection />
+          </Section>
+          <Section title="How you study" description="The steps for each lecture or chapter, in your order.">
+            <StudyStyleEditor />
           </Section>
           <Section title="Study rhythm" description="How much you want to study on a normal day.">
             <RhythmSettings week={false} />

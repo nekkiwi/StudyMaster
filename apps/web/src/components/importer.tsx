@@ -347,7 +347,8 @@ function AiRead({ subject, onChange }: { subject: DraftSubject; onChange: (next:
 function Review({ draft, onChange, targetId }: { draft: Draft; onChange: (d: Draft) => void; targetId?: string }) {
   const existing = useStore((s) => s.subjects);
   const existingChunks = useStore((s) => s.chunks);
-  const defaultRecording = useStore((s) => s.settings.defaultRecordingMinutes);
+  const watching = useStore((s) => s.settings.workflow.includes("watch"));
+  const defaultRecording = useStore((s) => (s.settings.workflow.includes("watch") ? s.settings.defaultRecordingMinutes : 0));
   const total = draft.subjects.reduce((a, s) => a + s.chunks.length, 0);
 
   const setSubject = (id: string, patch: Partial<DraftSubject>) =>
@@ -542,20 +543,25 @@ function Review({ draft, onChange, targetId }: { draft: Draft; onChange: (d: Dra
                       onChange={(e) => setChunk(subject.id, chunk.id, { title: e.target.value })}
                     />
                   </div>
-                  <div className="grid grid-cols-3 gap-2 pl-6">
+                  {/* Anki imports are about the cards – pages/slides can be added later. */}
+                  {!chunk.ankiDeck && (
+                  <div className={cx("grid gap-2 pl-6", watching ? "grid-cols-3" : "grid-cols-2")}>
                     {(
                       [
                         ["Video (min)", "recordingMinutes"],
                         ["Pages", "pages"],
                         ["Slides", "slides"],
                       ] as const
-                    ).map(([label, key]) => (
+                    )
+                      .filter(([, key]) => key !== "recordingMinutes" || watching)
+                      .map(([label, key]) => (
                       <label key={key} className="block">
                         <span className="mb-0.5 block text-[11px] text-slate-500">{label}</span>
                         <NumberInput aria-label={label} min={0} value={chunk[key]} onChange={(v) => setChunk(subject.id, chunk.id, { [key]: Math.max(0, Math.round(v)), note: undefined })} />
                       </label>
                     ))}
                   </div>
+                  )}
                   <div className="flex flex-wrap items-center gap-2 pl-6 text-xs text-slate-500">
                     <span className="min-w-0 basis-full truncate sm:flex-1 sm:basis-auto">{chunk.sources.join(" + ")}</span>
                     {chunk.ankiCards !== undefined && (

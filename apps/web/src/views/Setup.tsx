@@ -1,7 +1,8 @@
 import { addDays, planWithEscalation, type Subject } from "@studymaster/core";
 import { ArrowLeft, ArrowRight, CalendarDays, Check, GraduationCap, Layers, Loader2, Plus, Sparkles, Trash2, Upload } from "lucide-react";
 import { useEffect, useState } from "react";
-import { BufferSettings, DaysOffEditor, RhythmSettings } from "../components/settingsForm";
+import { AnkiOnboarding } from "../components/ankiConnect";
+import { BufferSettings, DaysOffEditor, RhythmSettings, StudyStyleEditor } from "../components/settingsForm";
 import { useAccount } from "../account";
 import { SignInForm } from "../components/account";
 import { ImportDialog } from "../components/importer";
@@ -11,7 +12,7 @@ import { nextColor } from "../lib/colors";
 import { formatHours, formatShort, newId, todayISO } from "../lib/format";
 import { useStore } from "../store";
 
-const STEPS = ["Exams", "Material", "Your week", "Days off", "Your plan"];
+const STEPS = ["Exams", "How you study", "Anki", "Material", "Your week", "Days off", "Your plan"];
 
 export function Setup() {
   const [step, setStep] = useState(-1);
@@ -47,7 +48,7 @@ export function Setup() {
         : subjects.some((s) => !s.name.trim())
           ? "Give every subject a name."
           : null
-      : step === 1 && chunks.length === 0
+      : step === 3 && chunks.length === 0
         ? "Add some material first – import files or add a lecture."
         : null;
 
@@ -70,10 +71,12 @@ export function Setup() {
 
       <div className="flex-1">
         {step === 0 && <SubjectsStep />}
-        {step === 1 && <MaterialStep />}
-        {step === 2 && <WeekStep />}
-        {step === 3 && <DaysOffStep />}
-        {step === 4 && <SummaryStep />}
+        {step === 1 && <StyleStep />}
+        {step === 2 && <AnkiStep />}
+        {step === 3 && <MaterialStep />}
+        {step === 4 && <WeekStep />}
+        {step === 5 && <DaysOffStep />}
+        {step === 6 && <SummaryStep />}
       </div>
 
       {blocker && <p className="mt-6 text-center text-sm text-slate-500 sm:hidden">{blocker}</p>}
@@ -100,7 +103,7 @@ export function Setup() {
 
 const FEATURES: [typeof GraduationCap, string][] = [
   [GraduationCap, "Main study ends early, with a short review right before each exam"],
-  [Layers, "Every lecture: watch → read → write cards, then study Anki"],
+  [Layers, "Your way of studying: reading, lectures, summaries, Anki – in your order"],
   [CalendarDays, "A weekly buffer half-day for catching up, free if you don't need it"],
 ];
 
@@ -298,6 +301,33 @@ function MaterialStep() {
           <ChunkList subject={subject} />
         </Card>
       )}
+    </div>
+  );
+}
+
+function StyleStep() {
+  return (
+    <div>
+      <StepHeader title="How do you study?">
+        Pick the steps you go through for each lecture or chapter, in your order. The default is reading, then making Anki cards and studying
+        them. Everything can be changed later in Settings.
+      </StepHeader>
+      <Card>
+        <StudyStyleEditor />
+      </Card>
+    </div>
+  );
+}
+
+function AnkiStep() {
+  return (
+    <div>
+      <StepHeader title="Do you use Anki?">
+        Anki is a free flashcard app. StudyMaster can plan your Anki time and open the right deck with one tap.
+      </StepHeader>
+      <Card>
+        <AnkiOnboarding />
+      </Card>
     </div>
   );
 }

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { DEFAULT_SETTINGS } from "../src/defaults.js";
+import { withDefaults } from "../src/defaults.js";
+import { LEGACY_WORKFLOW } from "../src/types.js";
 import {
   ankiMinutesPerSession,
   maxPieceMinutes,
@@ -11,14 +12,15 @@ import {
 import type { Chunk } from "../src/types.js";
 import { subject } from "./helpers.js";
 
-const s = DEFAULT_SETTINGS;
+// These tests use the classic style: watch → read → make cards → study Anki.
+const s = withDefaults({ workflow: [...LEGACY_WORKFLOW] });
 const chapter: Chunk = { id: "c", subjectId: "bio", title: "Ch 1", pages: 20, slides: 0, order: 1 };
 
 describe("effort model", () => {
   it("adds watching, reading and writing cards", () => {
     // 60 min recording + 20 pages × 3 min + 30 cards × 1.5 min = 165
     const lecture = { ...chapter, recordingMinutes: 60 };
-    expect(stepMinutes(lecture, subject("bio", "2026-12-01"), s)).toEqual({ watch: 60, read: 60, cards: 45 });
+    expect(stepMinutes(lecture, subject("bio", "2026-12-01"), s)).toEqual({ watch: 60, read: 60, summary: 0, cards: 45, revise: 0 });
     expect(totalMinutes(lecture, subject("bio", "2026-12-01"), s)).toBe(165);
   });
 

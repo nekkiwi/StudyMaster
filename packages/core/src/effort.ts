@@ -1,7 +1,24 @@
 import type { Chunk, ItemKind, PlannedSession, PlanItem, Settings, SlotId, StepKey, Subject } from "./types.js";
 import { STEPS } from "./types.js";
 
-const NO_STEPS: Record<StepKey, number> = { watch: 0, read: 0, cards: 0 };
+const NO_STEPS: Record<StepKey, number> = { watch: 0, read: 0, summary: 0, cards: 0, revise: 0 };
+
+/** The chunk steps of the study style, in its order. */
+export function workSteps(settings: Settings): StepKey[] {
+  return settings.workflow.filter((a): a is StepKey => a !== "anki");
+}
+
+/** Whether the study style includes studying Anki. */
+export function usesAnki(settings: Settings): boolean {
+  return settings.workflow.includes("anki");
+}
+
+/** Anki goes first in a session when it comes before every chunk step. */
+export function ankiFirst(settings: Settings): boolean {
+  const anki = settings.workflow.indexOf("anki");
+  const work = settings.workflow.findIndex((a) => a !== "anki");
+  return anki >= 0 && (work < 0 || anki < work);
+}
 
 /** Chapter (pages), slide deck (slides), both, or only a recording. */
 export function chunkKind(chunk: Chunk): Exclude<ItemKind, "anki"> {
@@ -83,7 +100,10 @@ export function estimatedCards(chunk: Chunk, settings: Settings): number {
   return Math.max(guessedCards(chunk, settings), chunk.ankiCards ?? 0);
 }
 
-/** Full effort per step in minutes. Reading and writing cards include the subject weight. */
+/**
+ * Full effort per step in minutes; steps that aren't part of the study style
+ * count 0. Everything except watching includes the subject weight.
+ */
 export function stepMinutes(
   chunk: Chunk,
   subject: Subject,
@@ -91,10 +111,14 @@ export function stepMinutes(
 ): Record<StepKey, number> {
   const r = settings.rates;
   const w = subject.weight;
+  const on = new Set(workSteps(settings));
+  const per = (page: number, slide: number) => (chunk.pages * page + chunk.slides * slide) * w;
   return {
-    watch: (chunk.recordingMinutes ?? 0) * r.recordingFactor,
-    read: (chunk.pages * r.readPerPage + chunk.slides * r.readPerSlide) * w,
-    cards: estimatedCards(chunk, settings) * r.minutesPerCard * w,
+    watch: on.has("watch") ? (chunk.recordingMinutes ?? 0) * r.recordingFactor : 0,
+    read: on.has("read") ? per(r.readPerPage, r.readPerSlide) : 0,
+    summary: on.has("summary") ? per(r.summaryPerPage, r.summaryPerSlide) : 0,
+    cards: on.has("cards") ? estimatedCards(chunk, settings) * r.minutesPerCard * w : 0,
+    revise: on.has("revise") ? per(r.revisePerPage, r.revisePerSlide) : 0,
   };
 }
 
@@ -124,14 +148,14 @@ export function maxPieceMinutes(settings: Settings): number {
 }
 
 /**
- * Cuts a piece in two along its step order (watch → read → cards):
+ * Cuts a piece in two along its step order (the study style's order):
  * the head takes the first `headCost` minutes of room, the tail the rest.
  */
-export function cutItem(item: PlanItem, headCost: number): [PlanItem, PlanItem] {
+export function cutItem(item: PlanItem, headCost: number, order: readonly StepKey[] = STEPS): [PlanItem, PlanItem] {
   const head: PlanItem = { ...item, steps: { ...NO_STEPS }, deltas: { ...NO_STEPS }, minutes: 0, pages: 0, slides: 0, cards: 0, learnMinutes: 0 };
   const tail: PlanItem = { ...item, steps: { ...NO_STEPS }, deltas: { ...NO_STEPS }, minutes: 0, pages: 0, slides: 0, cards: 0, learnMinutes: 0 };
   let left = Math.max(0, headCost);
-  for (const k of STEPS) {
+  for (const k of order) {
     const cost = item.steps[k] + (k === "cards" ? item.learnMinutes : 0);
     if (cost <= 0) continue;
     const f = Math.min(1, left / cost);
@@ -182,8 +206,9 @@ export function splitChunk(chunk: Chunk, subject: Subject, settings: Settings): 
     steps,
     pages: chunk.pages * left.read,
     slides: chunk.slides * left.read,
-    cards: cards * left.cards,
-    learnMinutes: (cards * left.cards * settings.anki.secondsPerNewCard) / 60,
+    cards: steps.cards > 0 ? cards * left.cards : 0,
+    // Learning the new cards is reserved with the piece – only when Anki is studied.
+    learnMinutes: steps.cards > 0 && usesAnki(settings) ? (cards * left.cards * settings.anki.secondsPerNewCard) / 60 : 0,
     deltas: left,
   };
 
@@ -197,7 +222,7 @@ export function splitChunk(chunk: Chunk, subject: Subject, settings: Settings): 
   const items: PlanItem[] = [];
   let rest = whole;
   for (let i = 0; i < parts - 1; i++) {
-    const [head, tail] = cutItem(rest, itemCost(whole) / parts);
+    const [head, tail] = cutItem(rest, itemCost(whole) / parts, workSteps(settings));
     items.push(head);
     rest = tail;
   }

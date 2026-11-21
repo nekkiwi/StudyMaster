@@ -19,7 +19,7 @@ import { canTalkToAnki, createMissingDecks } from "./ankiConnect";
 import { ImportDialog } from "./importer";
 import { KIND_ICON, KIND_LABEL } from "./session";
 import { toast } from "./toast";
-import { STEP_META } from "./steps";
+import { stepsInOrder } from "./steps";
 import { Button, Field, NameInput, NumberInput, Segmented, TextArea, TextInput, cx } from "./ui";
 
 export const WEIGHT_LABEL: Record<Weight, string> = {
@@ -151,6 +151,7 @@ function ChunkRow({
   onMove: (d: -1 | 1) => void;
 }) {
   const done = left < 0.5;
+  const workflow = useStore((s) => s.settings.workflow);
   const kind = chunkKind(chunk);
   const KindIcon = KIND_ICON[kind];
   return (
@@ -161,14 +162,17 @@ function ChunkRow({
         </span>
         <TextInput className="min-w-0 flex-1" value={chunk.title} aria-label="Title" onChange={(e) => onChange({ ...chunk, title: e.target.value })} />
       </div>
-      <div className="mt-2 grid grid-cols-3 gap-2">
+      <div className={cx("mt-2 grid gap-2", workflow.includes("watch") ? "grid-cols-3" : "grid-cols-2")}>
         {(
           [
             ["Video (min)", chunk.recordingMinutes ?? 0, (v: number) => onChange({ ...chunk, recordingMinutes: v })],
             ["Pages", chunk.pages, (v: number) => onChange({ ...chunk, pages: v })],
             ["Slides", chunk.slides, (v: number) => onChange({ ...chunk, slides: v })],
           ] as const
-        ).map(([label, value, set]) => (
+        )
+          // Video length only matters when watching lectures is part of the study style.
+          .filter(([label]) => label !== "Video (min)" || workflow.includes("watch"))
+          .map(([label, value, set]) => (
           <label key={label} className="block">
             <span className="mb-0.5 block text-[11px] text-slate-500">{label}</span>
             <NumberInput aria-label={label} min={0} value={value} onChange={(v) => set(Math.max(0, Math.round(v)))} />
@@ -176,7 +180,7 @@ function ChunkRow({
         ))}
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2">
-        {STEP_META.filter(({ key }) => key !== "watch" || (chunk.recordingMinutes ?? 0) > 0).map(({ key, icon: Icon, label }) => {
+        {stepsInOrder(workflow).filter(({ key }) => key !== "watch" || (chunk.recordingMinutes ?? 0) > 0).map(({ key, icon: Icon, label }) => {
           const value = chunk.done?.[key] ?? 0;
           const on = value >= 0.999;
           return (
@@ -247,7 +251,9 @@ function deckForNew(subject: Subject, chunkIds: string[]) {
 
 export function AddChunks({ subject, nextOrder }: { subject: Subject; nextOrder: number }) {
   const addChunks = useStore((s) => s.addChunks);
-  const defaultRecording = useStore((s) => s.settings.defaultRecordingMinutes);
+  const watching = useStore((s) => s.settings.workflow.includes("watch"));
+  // Without watching lectures in the study style, new items get no video length.
+  const defaultRecording = useStore((s) => (watching ? s.settings.defaultRecordingMinutes : 0));
   const [mode, setMode] = useState<"one" | "many">("one");
   const [title, setTitle] = useState("");
   const [recording, setRecording] = useState(defaultRecording);
@@ -306,11 +312,13 @@ export function AddChunks({ subject, nextOrder }: { subject: Subject; nextOrder:
               <TextInput value={title} placeholder="Lecture 7 / Ch 4" onChange={(e) => setTitle(e.target.value)} />
             </Field>
           </div>
-          <div className="w-24">
-            <Field label="Video (min)">
-              <NumberInput min={0} value={recording} onChange={setRecording} />
-            </Field>
-          </div>
+          {watching && (
+            <div className="w-24">
+              <Field label="Video (min)">
+                <NumberInput min={0} value={recording} onChange={setRecording} />
+              </Field>
+            </div>
+          )}
           <div className="w-24">
             <Field label="Pages">
               <NumberInput min={0} value={pages} onChange={setPages} />

@@ -1,5 +1,5 @@
 import { isISODate } from "./dates.js";
-import { WEIGHTS, type StudyState } from "./types.js";
+import { ACTIVITIES, WEIGHTS, type StudyState } from "./types.js";
 
 /** Returns human-readable problems; an empty list means the input is fine. */
 export function validateState(state: StudyState): string[] {
@@ -60,6 +60,8 @@ export function validateState(state: StudyState): string[] {
   if (when !== "auto" && (when.weekday < 0 || when.weekday > 6)) {
     errors.push("Weekly buffer weekday must be 0 (Sunday) to 6 (Saturday).");
   }
+  if (!Array.isArray(s.workflow) || s.workflow.length === 0) errors.push("Pick at least one way to study.");
+  else if (s.workflow.some((a) => !ACTIVITIES.includes(a))) errors.push("The study style contains an unknown step.");
   for (const [subjectId, days] of Object.entries(state.ankiDue ?? {})) {
     for (const [date, n] of Object.entries(days)) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !(n >= 0)) errors.push(`Invalid Anki due count for ${subjectId} on ${date}.`);

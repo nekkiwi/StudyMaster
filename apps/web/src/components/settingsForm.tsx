@@ -1,4 +1,6 @@
 import {
+  ACTIVITIES,
+  type Activity,
   DEFAULT_WEEK,
   everyDay,
   sessionsPerWeek,
@@ -10,10 +12,11 @@ import {
   type Settings,
   type WeekPlan,
 } from "@studymaster/core";
-import { Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, Plus, Trash2, X } from "lucide-react";
 import { Fragment, useState } from "react";
 import { formatShort, newId, todayISO, WEEKDAYS } from "../lib/format";
 import { useStore } from "../store";
+import { ACTIVITY_META } from "./steps";
 import { Button, cx, Field, NumberInput, Segmented, Select, TextInput, Toggle } from "./ui";
 
 const COUNTS: SessionCount[] = [1, 2, 3, 4];
@@ -31,6 +34,7 @@ const PRESETS: { label: string; detail: string; week: () => WeekPlan }[] = [
     week: () => DEFAULT_WEEK.map((d, i) => (i === 0 || i === 6 ? { am: 0, pm: 0 } : { ...d })) as WeekPlan,
   },
   { label: "Every day, morning + afternoon", detail: "Exam season: full days", week: () => everyDay(1, 1) },
+  { label: "Every day, four sessions", detail: "Full-time studying: 8–10 h a day", week: () => everyDay(2, 2) },
 ];
 
 const sameWeek = (a: WeekPlan, b: WeekPlan) => a.every((d, i) => d.am === b[i]!.am && d.pm === b[i]!.pm);
@@ -48,7 +52,7 @@ export function WeekGrid() {
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
         {PRESETS.map((p) => {
           const week = p.week();
           const active = sameWeek(week, s.week);
@@ -58,7 +62,8 @@ export function WeekGrid() {
               key={p.label}
               type="button"
               aria-pressed={active}
-              onClick={() => update({ week })}
+              // Four sessions a day need "at most 4 a day" too.
+              onClick={() => update({ week, ...(week.some((d) => d.am + d.pm > s.maxSessionsPerDay) ? { maxSessionsPerDay: 4 } : {}) })}
               className={cx(
                 "rounded-2xl border-2 px-3 py-2.5 text-left transition sm:py-3",
                 active
@@ -137,6 +142,101 @@ function CellPicker({ label, value, onChange }: { label: string; value: HalfDayS
   );
 }
 
+const STYLE_PRESETS: { label: string; workflow: Activity[] }[] = [
+  { label: "Read → Anki", workflow: ["read", "cards", "anki"] },
+  { label: "Lecture → read → Anki", workflow: ["watch", "read", "cards", "anki"] },
+  { label: "With summaries", workflow: ["read", "summary", "revise"] },
+  { label: "Everything", workflow: ["watch", "read", "summary", "cards", "anki", "revise"] },
+];
+
+/**
+ * The study style: which steps, in which order. The chosen ones form a
+ * numbered list (move up/down, remove); the others can be added.
+ */
+export function StudyStyleEditor() {
+  const workflow = useStore((x) => x.settings.workflow);
+  const update = useStore((x) => x.updateSettings);
+  const set = (next: Activity[]) => next.length > 0 && update({ workflow: next });
+  const move = (i: number, d: -1 | 1) => {
+    const next = workflow.slice();
+    const j = i + d;
+    if (j < 0 || j >= next.length) return;
+    [next[i], next[j]] = [next[j]!, next[i]!];
+    set(next);
+  };
+  const unused = ACTIVITIES.filter((a) => !workflow.includes(a));
+  const same = (a: Activity[]) => a.length === workflow.length && a.every((x, i) => x === workflow[i]);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap gap-2">
+        {STYLE_PRESETS.map((p) => (
+          <button
+            key={p.label}
+            type="button"
+            aria-pressed={same(p.workflow)}
+            onClick={() => set(p.workflow)}
+            className={cx(
+              "rounded-full border px-3 py-1.5 text-sm font-medium transition",
+              same(p.workflow)
+                ? "border-indigo-500 bg-indigo-50 text-indigo-700 dark:border-indigo-400 dark:bg-indigo-500/10 dark:text-indigo-300"
+                : "border-slate-200 text-slate-600 hover:border-indigo-300 dark:border-slate-700 dark:text-slate-300",
+            )}
+          >
+            {p.label}
+          </button>
+        ))}
+      </div>
+      <ol className="space-y-2">
+        {workflow.map((a, i) => {
+          const m = ACTIVITY_META[a];
+          const Icon = m.icon;
+          return (
+            <li key={a} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-2.5 dark:border-slate-700 dark:bg-slate-900">
+              <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-indigo-600 text-xs font-semibold text-white">{i + 1}</span>
+              <Icon size={18} className="shrink-0 text-slate-500" />
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold">{m.title}</span>
+                <span className="block truncate text-xs text-slate-500">{m.hint}</span>
+              </span>
+              <span className="flex shrink-0 items-center">
+                <button type="button" disabled={i === 0} onClick={() => move(i, -1)} aria-label={`Move ${m.title} up`} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30 dark:hover:bg-slate-800">
+                  <ArrowUp size={16} />
+                </button>
+                <button type="button" disabled={i === workflow.length - 1} onClick={() => move(i, 1)} aria-label={`Move ${m.title} down`} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 disabled:opacity-30 dark:hover:bg-slate-800">
+                  <ArrowDown size={16} />
+                </button>
+                <button type="button" disabled={workflow.length === 1} onClick={() => set(workflow.filter((x) => x !== a))} aria-label={`Remove ${m.title}`} className="rounded-lg p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 disabled:opacity-30 dark:hover:bg-rose-500/10">
+                  <X size={16} />
+                </button>
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+      {unused.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-sm text-slate-500">Add:</span>
+          {unused.map((a) => {
+            const Icon = ACTIVITY_META[a].icon;
+            return (
+              <Button key={a} size="sm" variant="secondary" onClick={() => set([...workflow, a])}>
+                <Plus size={14} /> <Icon size={14} /> {ACTIVITY_META[a].title}
+              </Button>
+            );
+          })}
+        </div>
+      )}
+      <p className="text-xs text-slate-500">
+        Each lecture or chapter is worked through in this order.{" "}
+        {workflow.includes("anki")
+          ? "“Study Anki” happens in every session – at the start if it's first in the list, otherwise at the end."
+          : "Without “Study Anki”, no Anki time is planned."}
+      </p>
+    </div>
+  );
+}
+
 export function RhythmSettings({ week = true }: { week?: boolean }) {
   const s = useStore((x) => x.settings);
   const update = useStore((x) => x.updateSettings);
@@ -178,6 +278,13 @@ export function RhythmSettings({ week = true }: { week?: boolean }) {
             { value: "even", label: "Steady" },
             { value: "early", label: "Finish early" },
           ]}
+        />
+      </Field>
+      <Field label="Review before each exam" hint="Share of a subject's study time for review sessions right before its exam – more material, more review." group>
+        <Segmented
+          value={s.reviewShare}
+          onChange={(v) => update({ reviewShare: v })}
+          options={[0.05, 0.1, 0.15, 0.2].map((v) => ({ value: v, label: `${Math.round(v * 100)} %` }))}
         />
       </Field>
       <Field label="Finish main study before each exam" hint="The last days before an exam are for review only." group>
@@ -309,6 +416,10 @@ export function RateSettings() {
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
         {row("Reading min / page", "readPerPage")}
         {row("Reading min / slide", "readPerSlide")}
+        {row("Summary min / page", "summaryPerPage")}
+        {row("Summary min / slide", "summaryPerSlide")}
+        {row("Studying summary min / page", "revisePerPage", 0.1)}
+        {row("Studying summary min / slide", "revisePerSlide", 0.1)}
         {row("Cards per page", "cardsPerPage", 0.1)}
         {row("Cards per slide", "cardsPerSlide", 0.1)}
         {row("Min to write a card", "minutesPerCard")}

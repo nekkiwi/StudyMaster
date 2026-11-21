@@ -139,7 +139,7 @@ export function addDecksAsItems(subject: Subject, decks: string[]): number {
         id: newId(),
         subjectId: subject.id,
         title: leaf(deck),
-        recordingMinutes: settings.defaultRecordingMinutes,
+        recordingMinutes: 0, // Anki decks are about the cards; video, pages, slides can be added later
         pages: 0,
         slides: 0,
         order: ++order,
@@ -915,6 +915,158 @@ export function AnkiSuggestions() {
           </li>
         ))}
       </ul>
+    </div>
+  );
+}
+
+type AnkiUse = "app" | "web" | "phone" | "none";
+
+/**
+ * Setup wizard step: does the user use Anki, and how? Then a step-by-step
+ * setup for the chosen way (computer app + AnkiConnect, AnkiWeb, phone app).
+ */
+export function AnkiOnboarding() {
+  const platform = detectPlatform();
+  const connected = useDevice((s) => s.ankiConnected);
+  const ankiWeb = useDevice((s) => s.ankiWeb);
+  const setAnkiWeb = useDevice((s) => s.setAnkiWeb);
+  const workflow = useStore((s) => s.settings.workflow);
+  const update = useStore((s) => s.updateSettings);
+  const { connect, busy } = useConnectAnki();
+  const usesAnkiNow = workflow.includes("anki") || workflow.includes("cards");
+  const [use, setUse] = useState<AnkiUse | null>(
+    !usesAnkiNow ? "none" : ankiWeb ? "web" : connected ? "app" : null,
+  );
+
+  const choose = (u: AnkiUse) => {
+    setUse(u);
+    setAnkiWeb(u === "web");
+    if (u === "none") {
+      const rest = workflow.filter((a) => a !== "anki" && a !== "cards");
+      update({ workflow: rest.length ? rest : ["read", "summary", "revise"] });
+    } else if (!workflow.includes("anki")) {
+      update({ workflow: [...workflow, "anki"] });
+    }
+  };
+
+  const options: { value: AnkiUse; title: string; text: string }[] = [
+    { value: "app", title: "Yes – the Anki app on a computer", text: "Windows, Mac or Linux. Best: StudyMaster opens the exact deck and reads your card numbers." },
+    { value: "web", title: "Yes – only AnkiWeb in the browser", text: "No app installed. ▶ Anki opens AnkiWeb and tells you which deck to open." },
+    { value: "phone", title: "Yes – the app on my phone", text: "AnkiDroid or AnkiMobile. ▶ Anki opens the app." },
+    { value: "none", title: "No, I don't use Anki", text: "No Anki time is planned. You can turn it on later in Settings." },
+  ];
+
+  const step = (n: number, done: boolean, title: string, body: React.ReactNode) => (
+    <li className="flex gap-3">
+      <span
+        className={cx(
+          "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
+          done ? "bg-emerald-500 text-white" : "bg-indigo-600 text-white",
+        )}
+      >
+        {done ? <CheckCircle2 size={16} /> : n}
+      </span>
+      <div className="min-w-0 flex-1 space-y-1.5 pb-1">
+        <p className="font-semibold">{title}</p>
+        <div className="text-sm text-slate-600 dark:text-slate-400">{body}</div>
+      </div>
+    </li>
+  );
+
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        {options.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            aria-pressed={use === o.value}
+            onClick={() => choose(o.value)}
+            className={cx(
+              "rounded-2xl border-2 p-4 text-left transition",
+              use === o.value
+                ? "border-indigo-500 bg-indigo-50 dark:border-indigo-400 dark:bg-indigo-500/10"
+                : "border-slate-200 hover:border-indigo-300 dark:border-slate-700",
+            )}
+          >
+            <span className="block font-semibold">{o.title}</span>
+            <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">{o.text}</span>
+          </button>
+        ))}
+      </div>
+
+      {use === "app" && platform !== "desktop" && (
+        <p className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+          Connecting the Anki app works on a computer. Finish setting up here, then open StudyMaster on your computer and go to Settings → Anki –
+          the steps are there too. Your plan syncs when you're signed in.
+        </p>
+      )}
+      {use === "app" && platform === "desktop" && isDesktopSafari() && (
+        <div className="rounded-2xl bg-amber-50 p-4 text-sm text-amber-800 dark:bg-amber-500/10 dark:text-amber-300">
+          <SafariNote />
+        </div>
+      )}
+      {use === "app" && platform === "desktop" && !isDesktopSafari() && (
+        <ol className="space-y-4 rounded-2xl border border-slate-200 p-4 dark:border-slate-800">
+          {step(
+            1,
+            connected,
+            "Install the free Anki app",
+            <>
+              Skip this if you have it. Download it from{" "}
+              <a href="https://apps.ankiweb.net" target="_blank" rel="noopener" className="font-medium text-indigo-600 underline dark:text-indigo-400">
+                apps.ankiweb.net
+              </a>{" "}
+              and sign in with your AnkiWeb account so your cards sync.
+            </>,
+          )}
+          {step(
+            2,
+            connected,
+            "Add the AnkiConnect add-on",
+            <>
+              In Anki: <i>Tools → Add-ons → Get Add-ons…</i>, enter the code <span className="rounded bg-slate-100 px-1.5 py-0.5 font-mono dark:bg-slate-800">2055492159</span>{" "}
+              and press OK. Then <b>restart Anki</b>.
+            </>,
+          )}
+          {step(
+            3,
+            connected,
+            "Connect",
+            connected ? (
+              <span className="font-medium text-emerald-700 dark:text-emerald-400">Connected – ▶ Anki now opens the exact deck.</span>
+            ) : (
+              <div className="space-y-2">
+                <p>
+                  Keep Anki open and press Connect. Your browser may ask to allow access to apps on this device (choose <b>Allow</b>), then Anki asks
+                  whether to allow StudyMaster (choose <b>Yes</b>).
+                </p>
+                <Button onClick={connect} disabled={busy}>
+                  {busy ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />} Connect Anki
+                </Button>
+              </div>
+            ),
+          )}
+          {step(
+            4,
+            false,
+            "Link your decks (later)",
+            <>In the next step, pick “From your Anki deck” for a subject: its sub-decks become the lectures, with their card counts.</>,
+          )}
+        </ol>
+      )}
+      {use === "web" && (
+        <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-400">
+          ▶ Anki will open AnkiWeb in a new tab and tell you which deck to open. AnkiWeb can't be connected to other websites, so StudyMaster can't
+          read your card numbers – install the free Anki app on a computer anytime for that (Settings → Anki).
+        </p>
+      )}
+      {use === "phone" && (
+        <p className="rounded-2xl bg-slate-50 p-4 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-400">
+          ▶ Anki opens {platform === "ios" ? "AnkiMobile at the right deck" : "AnkiDroid at the right deck's cards"}. To link subjects to your decks
+          and see card numbers in your plan, connect the Anki app on a computer once (Settings → Anki there).
+        </p>
+      )}
     </div>
   );
 }

@@ -120,6 +120,29 @@ The real workflow: A) watch → read → write cards, then B) study Anki.
   (≥ 15 min), so reviews never pause. Only once cards exist. Free days in the
   weekly plan stay free.
 
+### Study style
+Each user picks the steps for a lecture/chapter and their order
+(`settings.workflow`): watch the lecture, read, write a summary, make Anki
+cards, study Anki, study the summary. Default **read → make cards → study
+Anki**; presets: Read → Anki, Lecture → read → Anki, With summaries,
+Everything. Chunk steps are split into pieces in that order; "Study Anki"
+is a session item (first if it's first in the list, else last); without it
+no Anki time is planned. Summary times have their own rates (Settings →
+Time estimates). Video fields are hidden when watching isn't part of the
+style. Data from before study styles keeps watch → read → cards → Anki.
+
+### Onboarding
+Exams → **How you study** (style editor) → **Anki** ("Do you use Anki?":
+app on a computer → step-by-step install Anki, AnkiConnect, Connect; AnkiWeb
+only; phone app; no → Anki removed from the style) → Material → Your week
+(presets incl. "Every day, four sessions") → Days off → Your plan.
+
+### Exam review
+Review time = `reviewShare` (Settings: 5/10/15/20 %, default 10 %) of the
+subject's study time – more material, more review – split into review
+sessions (≤ 70 % of a session each, up to 6) in the last free slots before
+the exam; main study must be done before the first one.
+
 ### Books without bookmarks
 A PDF book without bookmarks is read through its printed table of contents
 (pages near the start with an "Inhalt/Contents" heading, plus following

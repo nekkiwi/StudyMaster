@@ -29,12 +29,20 @@ export interface Subject {
 }
 
 /**
- * Every chunk (usually one lecture) is worked through in this order:
- * watch the lecture recording → read the chapter / slide deck → write Anki cards.
- * Studying the cards (learning new + reviewing old) is a separate Anki item.
+ * Steps a chunk (usually one lecture) can be worked through with – which
+ * ones and in which order is the user's study style (`Settings.workflow`):
+ * watch the recording, read the chapter / slides, write a summary, make Anki
+ * cards, study the summary. Studying Anki is a separate session item.
  */
-export type StepKey = "watch" | "read" | "cards";
-export const STEPS: readonly StepKey[] = ["watch", "read", "cards"];
+export type StepKey = "watch" | "read" | "summary" | "cards" | "revise";
+export const STEPS: readonly StepKey[] = ["watch", "read", "summary", "cards", "revise"];
+
+/** Everything a study style can contain: the chunk steps plus studying Anki. */
+export type Activity = StepKey | "anki";
+export const ACTIVITIES: readonly Activity[] = ["watch", "read", "summary", "cards", "anki", "revise"];
+
+/** Old fixed workflow, kept for data saved before study styles existed. */
+export const LEGACY_WORKFLOW: readonly Activity[] = ["watch", "read", "cards", "anki"];
 
 /** One study unit, usually a lecture: recording + chapter and/or slide deck. */
 export interface Chunk {
@@ -81,6 +89,12 @@ export interface Rates {
   recordingFactor: number;
   readPerPage: number;
   readPerSlide: number;
+  /** Writing a summary, minutes per page / slide of material. */
+  summaryPerPage: number;
+  summaryPerSlide: number;
+  /** Studying the summary later, minutes per page / slide of material. */
+  revisePerPage: number;
+  revisePerSlide: number;
   cardsPerPage: number;
   cardsPerSlide: number;
   minutesPerCard: number;
@@ -153,6 +167,12 @@ export interface Settings {
   pacing: Pacing;
   /** Recording length suggested when adding new chunks (UI default). */
   defaultRecordingMinutes: number;
+  /**
+   * The study style: which activities, in which order. Chunk steps are done
+   * in this order; "anki" (studying cards) goes first in each session if it
+   * comes before every chunk step, else last.
+   */
+  workflow: Activity[];
   rates: Rates;
   anki: AnkiSettings;
   weeklyBuffer: WeeklyBuffer;

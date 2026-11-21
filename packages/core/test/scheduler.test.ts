@@ -479,7 +479,7 @@ describe("real numbers from Anki", () => {
 
   it("moves 'write cards' forward from the cards in Anki", async () => {
     const { applyAnkiCounts } = await import("../src/checkin.js");
-    const s = withDefaults({});
+    const s = withDefaults({ workflow: ["watch", "read", "cards", "anki"] });
     const [a, b, c] = chunks("bio", 3, 16); // 16 pages → 24 expected cards
     const out = applyAnkiCounts([a!, b!, c!], { "bio-1": 12, "bio-2": 30 }, s);
     expect(out[0]).toMatchObject({ ankiCards: 12, done: { cards: 0.5 } });
@@ -492,5 +492,48 @@ describe("real numbers from Anki", () => {
     // No pages or slides yet: the count is kept, progress isn't guessed.
     const bare = { id: "x", subjectId: "bio", title: "L", pages: 0, slides: 0, order: 9 };
     expect(applyAnkiCounts([bare], { x: 50 }, s)[0]).toMatchObject({ ankiCards: 50, done: {} });
+  });
+});
+
+describe("study style (workflow)", () => {
+  const MON_ = "2026-11-23";
+  const lecture = (id: string, order: number) => ({ id, subjectId: "bio", title: `L${order}`, pages: 10, slides: 0, recordingMinutes: 60, order });
+
+  it("default style: read → make cards → study Anki, no watching", async () => {
+    const { withDefaults: wd } = await import("../src/defaults.js");
+    const st = { ...state([subject("bio", "2026-12-20")], [lecture("a", 1)]), settings: wd({ week: dailySessions(2) }) };
+    const items = planOnce(st, MON_, normal).sessions.flatMap((x) => x.items).filter((i) => i.kind !== "anki");
+    expect(items.every((i) => i.steps.watch === 0)).toBe(true);
+    expect(items.some((i) => i.steps.read > 0 && i.steps.cards > 0)).toBe(true);
+  });
+
+  it("follows the chosen order and includes summaries", () => {
+    const st = state([subject("bio", "2026-12-20")], [lecture("a", 1)], { workflow: ["summary", "read", "revise"], maxPagesPerChunk: 200 });
+    const items = planOnce(st, MON_, normal).sessions.flatMap((x) => x.items);
+    expect(items.some((i) => i.kind === "anki")).toBe(false); // no Anki in this style
+    const work = items.filter((i) => i.chunkId === "a");
+    const total = (k: "summary" | "read" | "revise" | "cards") => work.reduce((a, i) => a + i.steps[k], 0);
+    expect(total("summary")).toBe(40); // 10 pages × 4 min
+    expect(total("revise")).toBe(10);
+    expect(total("cards")).toBe(0);
+    // When the lecture is cut, the summary comes first.
+    const first = work[0]!;
+    expect(first.steps.summary).toBeGreaterThan(0);
+  });
+
+  it("puts Anki first in each session when it comes first in the style", () => {
+    const st = state([subject("bio", "2026-12-20")], chunks("bio", 4), { workflow: ["anki", "read", "cards"] });
+    const study = planOnce(st, MON_, normal).sessions.filter((x) => x.type === "study");
+    expect(study.every((x) => x.items[0]!.kind === "anki")).toBe(true);
+  });
+
+  it("gives big subjects more exam review than small ones", () => {
+    const big = state([subject("bio", "2026-12-20")], chunks("bio", 40, 30));
+    const small = state([subject("bio", "2026-12-20")], chunks("bio", 4, 10));
+    const review = (st: typeof big) =>
+      planOnce(st, MON_, normal).sessions.filter((x) => x.type === "review").reduce((a, x) => a + (x.reviewMinutes ?? 0), 0);
+    const reviewSessions = planOnce(big, MON_, normal).sessions.filter((x) => x.type === "review").length;
+    expect(review(big)).toBeGreaterThan(review(small) * 3);
+    expect(reviewSessions).toBeGreaterThan(1);
   });
 });

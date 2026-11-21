@@ -1,10 +1,11 @@
-import { sessionMinutes, type Chunk, type ItemKind, type PlannedSession, type PlanItem, type Subject } from "@studymaster/core";
+import { sessionMinutes, type Chunk, type ItemKind, type PlannedSession, type PlanItem, type StepKey, type Subject } from "@studymaster/core";
 import { BookOpen, Files, Layers, PenLine, Play, Presentation, RotateCcw, Video } from "lucide-react";
 import { useMemo } from "react";
 import { deckForChunk, deckForSubject } from "../lib/anki";
 import { formatMinutes, SLOT_LABEL } from "../lib/format";
 import { useStore } from "../store";
 import { useOpenAnki } from "./ankiConnect";
+import { stepsInOrder } from "./steps";
 import { Badge, cx, SubjectDot } from "./ui";
 
 export const KIND_ICON: Record<ItemKind, typeof BookOpen> = {
@@ -168,20 +169,25 @@ function AnkiRow({ item, date, subjects, compact }: { item: PlanItem; date: stri
   );
 }
 
-/** "🎬 60 min · 📖 12 pages · ✍️ ~14 cards" for one piece of a lecture. */
+/** "🎬 60 min · 📖 12 pages · 📝 summary 40 min · ✍️ ~14 cards" for one piece, in the study style's order. */
 export function StepChips({ item }: { item: PlanItem }) {
-  const chips: { icon: typeof Video; text: string }[] = [];
-  if (item.steps.watch > 0) chips.push({ icon: Video, text: formatMinutes(item.steps.watch) });
-  if (item.steps.read > 0) {
-    const what = [item.pages > 0 && `${item.pages} pages`, item.slides > 0 && `${item.slides} slides`].filter(Boolean).join(" + ");
-    chips.push({ icon: BookOpen, text: what || formatMinutes(item.steps.read) });
-  }
-  if (item.steps.cards > 0) chips.push({ icon: PenLine, text: `~${item.cards} cards` });
+  const workflow = useStore((s) => s.settings.workflow);
+  const text = (key: StepKey): string => {
+    if (key === "read") {
+      const what = [item.pages > 0 && `${item.pages} pages`, item.slides > 0 && `${item.slides} slides`].filter(Boolean).join(" + ");
+      return what || formatMinutes(item.steps.read);
+    }
+    if (key === "cards") return `~${item.cards} cards`;
+    if (key === "summary") return `summary ${formatMinutes(item.steps.summary)}`;
+    if (key === "revise") return `study summary ${formatMinutes(item.steps.revise)}`;
+    return formatMinutes(item.steps[key]);
+  };
+  const chips = stepsInOrder(workflow).filter(({ key }) => item.steps[key] > 0);
   return (
     <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-0.5">
-      {chips.map(({ icon: Icon, text }) => (
-        <span key={text} className="inline-flex items-center gap-1 whitespace-nowrap">
-          <Icon size={11} /> {text}
+      {chips.map(({ key, icon: Icon }) => (
+        <span key={key} className="inline-flex items-center gap-1 whitespace-nowrap">
+          <Icon size={11} /> {text(key)}
         </span>
       ))}
     </span>

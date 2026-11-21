@@ -148,9 +148,10 @@ describe("Anki decks", () => {
     const draft = draftFromAnki(names, ["Biology"], [], [], TODAY, 60);
     const s = draft.subjects[0]!;
     expect(s).toMatchObject({ name: "Biology", ankiDeck: "Biology", existingId: undefined, links: [] });
+    // Anki imports are about the cards: no video length assumed.
     expect(s.chunks.map((c) => [c.title, c.ankiDeck, c.recordingMinutes])).toEqual([
-      ["VL01 Intro", "Biology::VL01 Intro", 60],
-      ["VL02 Cells", "Biology::VL02 Cells", 60],
+      ["VL01 Intro", "Biology::VL01 Intro", 0],
+      ["VL02 Cells", "Biology::VL02 Cells", 0],
     ]);
   });
 

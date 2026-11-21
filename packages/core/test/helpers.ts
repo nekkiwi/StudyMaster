@@ -1,5 +1,5 @@
 import { dailySessions, withDefaults } from "../src/defaults.js";
-import type { BlockedRange, Chunk, Settings, StudyState, Subject } from "../src/types.js";
+import { LEGACY_WORKFLOW, type BlockedRange, type Chunk, type Settings, type StudyState, type Subject } from "../src/types.js";
 
 export function subject(id: string, examDate: string, extra: Partial<Subject> = {}): Subject {
   return { id, name: id.toUpperCase(), weight: 1, examDate, ...extra };
@@ -22,6 +22,7 @@ export function state(
   settings: Partial<Settings> = {},
   blocked: BlockedRange[] = [],
 ): StudyState {
-  // Tests plan every day (am1 + pm1) unless they set their own week.
-  return { subjects, chunks: chunkList, blocked, settings: withDefaults({ week: dailySessions(2), ...settings }) };
+  // Tests plan every day (am1 + pm1) and use the classic study style
+  // (watch → read → make cards → study Anki) unless they set their own.
+  return { subjects, chunks: chunkList, blocked, settings: withDefaults({ week: dailySessions(2), workflow: [...LEGACY_WORKFLOW], ...settings }) };
 }

@@ -2,6 +2,7 @@ import {
   applyAnkiCounts,
   applyResults,
   DEFAULT_SETTINGS,
+  LEGACY_WORKFLOW,
   withDefaults,
   type BlockedRange,
   type Chunk,
@@ -110,13 +111,14 @@ export const useStore = create<Store>()(
       finishSetup: () => set({ setupDone: true, startDate: todayISO() }),
       loadDemo: () => {
         const today = todayISO();
-        set({ ...emptyData(), ...demoData(today), setupDone: true, startDate: today });
+        // The example has lecture recordings: classic style with watching.
+        set({ ...emptyData(), ...demoData(today), settings: withDefaults({ workflow: [...LEGACY_WORKFLOW] }), setupDone: true, startDate: today });
       },
       reset: () => {
         undoStack.clear();
         set(emptyData());
       },
-      importData: (data) => set({ ...emptyData(), ...data, settings: withDefaults(data.settings) }),
+      importData: (data) => set({ ...emptyData(), ...data, settings: upgradeSettings(data.settings) }),
 
       upsertSubject: (subject) =>
         set((s) => ({
@@ -260,11 +262,7 @@ export const useStore = create<Store>()(
       },
       merge: (persisted, current) => {
         const data = (persisted ?? {}) as Partial<AppData>;
-        const settings = withDefaults(data.settings);
-        // Older versions had a summary step; it's gone now.
-        const rates = settings.rates as unknown as Record<string, number>;
-        delete rates.summaryPerPage;
-        delete rates.summaryPerSlide;
+        const settings = upgradeSettings(data.settings);
         // Older versions had "sessions per day" instead of a weekly plan.
         delete (settings as unknown as Record<string, unknown>).preferredSessionsPerDay;
         return { ...current, ...data, settings };
@@ -272,6 +270,14 @@ export const useStore = create<Store>()(
     },
   ),
 );
+
+/**
+ * Settings from storage, a backup or the account. Data saved before study
+ * styles existed keeps its old steps (watch → read → make cards → study Anki).
+ */
+export function upgradeSettings(saved: Partial<Settings> | undefined): Settings {
+  return withDefaults(saved && !saved.workflow ? { ...saved, workflow: [...LEGACY_WORKFLOW] } : saved);
+}
 
 export function exportData(): AppData {
   const s = useStore.getState();

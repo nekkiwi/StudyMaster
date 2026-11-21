@@ -5,9 +5,11 @@ with exam dates, their material (chapters with pages, slide decks with slides)
 and a difficulty weight; the app plans every study session, including Anki
 work, and re-plans after a daily Yes/No check-in.
 
-Study workflow per lecture (chunk): 🎬 watch the recording → 📖 read the
-chapter / slides → ✍️ write Anki cards; then 🃏 study Anki (learn the new
-cards + review earlier cards of the same subject).
+Study style (`settings.workflow`, chosen in onboarding/Settings): any of
+🎬 watch the lecture, 📖 read, 📝 write a summary, ✍️ make Anki cards,
+🃏 study Anki, 🔁 study the summary – in the user's order. Default: read →
+make cards → study Anki. Data saved before study styles existed keeps
+watch → read → cards → Anki (`LEGACY_WORKFLOW`, `upgradeSettings`).
 
 Docs – read before bigger changes:
 - `docs/DESIGN.md` – product, data model, planner, check-in, dashboard
@@ -90,13 +92,15 @@ apps/api/        Cloudflare Worker code (same Worker as the site, only /api/*)
    per morning/afternoon; default weekday afternoons + weekend mornings). On
    study days, more slots up to `maxSessionsPerDay` are `extra`; free days get
    none. One half-day per week = `buffer` (catch-up reserve, empty unless needed).
-2. Reserve a short review session in the last free slot before every exam
-   (first, so back-to-back exams each get one).
-3. Walk slots in time order; each study session = lecture pieces, then an
-   Anki item (learn the session's new cards + review the same subjects).
-   Items have a category (`kind`): chapter, slides, mixed, recording, anki.
-   Pieces follow the step order watch → read → cards. A piece's room in a
-   session = its work + learning its new cards (`itemCost`). The subject
+2. Reserve review sessions before every exam: `reviewShare` of the
+   subject's study time, so more material = more review (several sessions;
+   first one per subject so back-to-back exams each get one).
+3. Walk slots in time order; each study session = lecture pieces plus an
+   Anki item (first if "anki" comes first in the style, else last; none if
+   the style has no Anki). Items have a category (`kind`): chapter, slides,
+   mixed, recording, anki. Pieces follow the style's step order
+   (`workSteps`); steps outside the style count 0 (`stepMinutes`). A piece's
+   room in a session = its work + learning its new cards (`itemCost`). The subject
    with the least slack (capacity before its deadline − remaining work) goes first.
    `pacing: "even"` (default) only takes a slot when the subject is behind its
    steady pace or time is tight; `"early"` fills everything ASAP.

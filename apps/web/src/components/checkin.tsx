@@ -5,7 +5,7 @@ import { formatLongDay, formatMinutes, relativeDays } from "../lib/format";
 import type { Planner } from "../planner";
 import { useStore } from "../store";
 import { toast } from "./toast";
-import { STEP_META } from "./steps";
+import { stepsInOrder } from "./steps";
 import { Button, Card, cx, Modal, SubjectDot } from "./ui";
 
 function recordItems(items: PlanItem[], done: (item: PlanItem) => boolean) {
@@ -92,6 +92,7 @@ function PartialCheckIn({
   onSave: (results: ItemResult[]) => void;
 }) {
   const [done, setDone] = useState<Record<string, StepKey[]>>({});
+  const workflow = useStore((s) => s.settings.workflow);
   const key = (i: PlanItem) => `${i.chunkId}-${i.part}`;
 
   const toggle = (item: PlanItem, step: StepKey) =>
@@ -158,8 +159,8 @@ function PartialCheckIn({
                 <span className="flex-1 text-sm font-medium">{item.title}</span>
                 <span className="text-xs text-slate-500">{formatMinutes(item.minutes)}</span>
               </div>
-              <div className="mt-2 grid grid-cols-3 gap-2">
-                {STEP_META.filter(({ key: step }) => item.steps[step] > 0).map(({ key: step, done: label, icon: Icon }) => {
+              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {stepsInOrder(workflow).filter(({ key: step }) => item.steps[step] > 0).map(({ key: step, done: label, icon: Icon }) => {
                   const on = steps.includes(step);
                   return (
                     <button

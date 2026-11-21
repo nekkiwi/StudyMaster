@@ -1,4 +1,4 @@
-import type { DayPlan, Settings, WeekPlan } from "./types.js";
+import { ACTIVITIES, type Activity, type DayPlan, type Settings, type WeekPlan } from "./types.js";
 
 const afternoon: DayPlan = { am: 0, pm: 2 };
 const morning: DayPlan = { am: 2, pm: 0 };
@@ -35,10 +35,16 @@ export const DEFAULT_SETTINGS: Settings = {
   reviewShare: 0.1,
   pacing: "even",
   defaultRecordingMinutes: 60,
+  // Read the material → make Anki cards → study Anki.
+  workflow: ["read", "cards", "anki"],
   rates: {
     recordingFactor: 1,
     readPerPage: 3,
     readPerSlide: 1,
+    summaryPerPage: 4,
+    summaryPerSlide: 1.5,
+    revisePerPage: 1,
+    revisePerSlide: 0.3,
     cardsPerPage: 1.5,
     cardsPerSlide: 0.7,
     minutesPerCard: 1.5,
@@ -61,5 +67,11 @@ export function withDefaults(partial: Partial<Settings> = {}): Settings {
     anki: { ...DEFAULT_SETTINGS.anki, ...partial.anki },
     weeklyBuffer: { ...DEFAULT_SETTINGS.weeklyBuffer, ...partial.weeklyBuffer },
     week: (partial.week ?? DEFAULT_SETTINGS.week).map((d) => ({ ...d })) as WeekPlan,
+    workflow: cleanWorkflow(partial.workflow ?? DEFAULT_SETTINGS.workflow),
   };
+}
+
+/** Known activities only, each once, order kept. */
+export function cleanWorkflow(list: readonly Activity[]): Activity[] {
+  return list.filter((a, i) => ACTIVITIES.includes(a) && list.indexOf(a) === i);
 }
