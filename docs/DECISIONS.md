@@ -54,3 +54,4 @@ entry, not by editing history.
 | 46 | **Onboarding asks "Do you use Anki?"** and guides the chosen way step by step (computer app + AnkiConnect, AnkiWeb, phone app, none) | Anki setup is the trickiest part; people without Anki shouldn't get Anki time planned | Anki setup only in Settings |
 | 47 | **Exam review scales with material** (share of study time, several sessions if needed) | A big subject needs more review than a small one; the old single short session was capped | One short review per exam |
 | 48 | **Anki imports are about the cards**: no video length assumed, pages/slides not asked in the review, existing cards count as made | Imported decks are for studying; material can be attached later | Treating sub-decks like lectures with a 60-min video |
+| 49 | **Plan page: week first, overview below**; long plans use a compact week-column overview | The week is what you plan with; a months-long overview grew very tall | Overview on top as a big grid |

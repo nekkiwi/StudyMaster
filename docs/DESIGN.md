@@ -359,8 +359,10 @@ Code: `apps/web/src/planner.ts`.
 - **Today:** greeting, today's sessions as cards, check-in card (prominent in
   the evening), pending check-ins from previous days, tomorrow preview, exam
   list with progress ring + days left + "on track / at risk", last 7 days.
-- **Plan:** week view (desktop 7 columns, phone list), overview calendar from
-  this week to the last exam with exam markers, exam list with "main study
+- **Plan:** the **week timetable is the main view** (desktop 7 columns, phone
+  list), the overview comes below: up to 6 weeks as a calendar grid, longer
+  plans as a compact year-style strip (one narrow column per week, month
+  labels, scrolls sideways; tap a week to show it above), with exam markers, exam list with "main study
   done by", legend. **Days take the colors of the subjects studied:** one
   subject = light tint of its color, two = split diagonally, more = diagonal
   stripes (overview: stronger on busier days). Buffer = striped amber, extra

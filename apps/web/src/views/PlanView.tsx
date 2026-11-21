@@ -43,8 +43,7 @@ export function PlanView({ planner }: { planner: Planner }) {
 
       <ProposalBanner planner={planner} />
 
-      <Overview planner={planner} onPickWeek={(d) => setWeekStart(fromDayNumber(weekKey(d)))} weekStart={weekStart} />
-
+      {/* The week is the main view; the overview of all weeks comes below. */}
       <div className="grid grid-cols-1 gap-3 md:grid-cols-7">
         {days.map((d) => (
           <DayColumn key={d} date={d} planner={planner} subjects={subjects} onOpen={() => setOpenDay(d)} />
@@ -52,6 +51,15 @@ export function PlanView({ planner }: { planner: Planner }) {
       </div>
 
       <Legend subjects={state.subjects} />
+
+      <Overview
+        planner={planner}
+        onPickWeek={(d) => {
+          setWeekStart(fromDayNumber(weekKey(d)));
+          window.scrollTo({ top: 0, behavior: "smooth" });
+        }}
+        weekStart={weekStart}
+      />
 
       <Modal open={!!openDay} onClose={() => setOpenDay(null)} title={openDay ? formatDay(openDay) : ""}>
         {openDay && (
@@ -192,6 +200,7 @@ function Overview({ planner, onPickWeek, weekStart }: { planner: Planner; onPick
   if (!last || last < today) return null;
 
   const days = eachDay(fromDayNumber(weekKey(today)), last);
+  const weeks = [...new Set(days.map((d) => fromDayNumber(weekKey(d))))];
   const max = state.settings.sessionMinutes * state.settings.maxSessionsPerDay;
   const load = new Map<ISODate, number>();
   for (const s of shown.plan.sessions) load.set(s.date, (load.get(s.date) ?? 0) + sessionMinutes(s));
@@ -207,6 +216,7 @@ function Overview({ planner, onPickWeek, weekStart }: { planner: Planner; onPick
         Overview
       </SectionTitle>
       <div className="flex flex-col gap-6 md:flex-row md:items-start">
+        {weeks.length <= 6 ? (
         <div className="grid w-full max-w-sm grid-cols-7 gap-1.5 self-center md:self-start">
           {["M", "T", "W", "T", "F", "S", "S"].map((d, i) => (
             <span key={i} className="text-center text-[10px] text-slate-400">{d}</span>
@@ -244,6 +254,31 @@ function Overview({ planner, onPickWeek, weekStart }: { planner: Planner; onPick
             );
           })}
         </div>
+        ) : (
+          <CompactCalendar
+            weeks={weeks}
+            today={today}
+            weekStart={weekStart}
+            onPickWeek={onPickWeek}
+            cell={(d) => {
+              const minutes = load.get(d) ?? 0;
+              const exam = exams.get(d);
+              const blocked = state.blocked.some((b) => b.start <= d && b.end >= d);
+              const level = minutes === 0 ? 0 : Math.min(4, Math.ceil((minutes / max) * 4));
+              const colors = daySubjects(shown.plan, d).filter((id) => subjects.has(id)).map((id) => subjectColor(subjects.get(id)));
+              return {
+                exam: !!exam,
+                title: `${formatDay(d)}${minutes ? ` · ${formatMinutes(minutes)}` : ""}${exam ? ` · ${exam.name} exam` : ""}`,
+                style: exam
+                  ? { background: subjectColor(exam) }
+                  : !blocked && minutes > 0
+                    ? { backgroundImage: dayBackground(colors, 35 + level * 12) }
+                    : undefined,
+                className: blocked ? "bg-slate-300 dark:bg-slate-600" : "bg-slate-100 dark:bg-slate-800",
+              };
+            }}
+          />
+        )}
         <ul className="flex-1 space-y-3">
           {upcoming.map((s) => {
             const st = status.get(s.id);
@@ -288,6 +323,63 @@ function Legend({ subjects }: { subjects: Subject[] }) {
       <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded ring-1 ring-rose-300" /> Extra session</span>
       <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-slate-200 dark:bg-slate-700" /> Day off</span>
       <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-indigo-600" /> Exam</span>
+    </div>
+  );
+}
+
+/**
+ * Many weeks: one narrow column per week (Mon–Sun top to bottom), month
+ * labels on top – like a year calendar. Scrolls sideways when needed.
+ */
+function CompactCalendar({
+  weeks,
+  today,
+  weekStart,
+  onPickWeek,
+  cell,
+}: {
+  weeks: ISODate[];
+  today: ISODate;
+  weekStart: ISODate;
+  onPickWeek: (d: ISODate) => void;
+  cell: (d: ISODate) => { title: string; style?: React.CSSProperties; className: string; exam: boolean };
+}) {
+  const monthOf = (d: ISODate) => new Date(`${d}T12:00:00`).toLocaleDateString(undefined, { month: "short" });
+  return (
+    <div className="w-full min-w-0 md:max-w-xl">
+      <div className="overflow-x-auto pb-2">
+        <div className="flex gap-1">
+          <div className="flex shrink-0 flex-col gap-1 pr-1 pt-5 text-[9px] leading-[14px] text-slate-400">
+            {["M", "", "W", "", "F", "", "S"].map((l, i) => (
+              <span key={i} className="h-3.5">{l}</span>
+            ))}
+          </div>
+          {weeks.map((w, i) => {
+            const newMonth = i === 0 || monthOf(w) !== monthOf(weeks[i - 1]!);
+            const inWeek = w === weekStart;
+            return (
+              <button
+                key={w}
+                type="button"
+                onClick={() => onPickWeek(w)}
+                aria-label={`Week of ${formatShort(w)}`}
+                className={cx("flex shrink-0 flex-col gap-1 rounded-md p-0.5 transition hover:bg-slate-100 dark:hover:bg-slate-800", inWeek && "ring-2 ring-indigo-500")}
+              >
+                <span className="h-4 text-left text-[10px] font-medium whitespace-nowrap text-slate-500">{newMonth ? monthOf(w) : ""}</span>
+                {eachDay(w, addDays(w, 6)).map((d) => {
+                  const c = cell(d);
+                  return (
+                    <span key={d} title={c.title} style={c.style} className={cx("relative block h-3.5 w-3.5 rounded-[3px]", c.className, d < today && "opacity-40")}>
+                      {d === today && <span className="absolute -top-0.5 -right-0.5 h-1.5 w-1.5 rounded-full bg-rose-500" />}
+                    </span>
+                  );
+                })}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <p className="text-xs text-slate-400">Tap a week to show it above.</p>
     </div>
   );
 }
