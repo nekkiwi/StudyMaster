@@ -65,8 +65,14 @@ export interface Chunk {
   ankiDeckId?: number;
   /** The user chose "whole subject deck": no own sub-deck in Anki. */
   ankiNoDeck?: boolean;
-  /** Cards that exist in the linked deck, as last read from Anki. */
+  /** Cards that exist in the linked deck, as last read from Anki (suspended ones left out). */
   ankiCards?: number;
+  /**
+   * Cards in the linked deck not studied yet (Anki's "new" cards), as last
+   * read from Anki; check-ins count them down until the next reading.
+   * Learning them is planned (e.g. a ready-made deck imported from Anki).
+   */
+  ankiNew?: number;
 }
 
 export type BlockReason = "vacation" | "sick" | "break" | "other";
@@ -254,6 +260,8 @@ export interface PlanItem {
   slides: number;
   /** Estimated Anki cards written in this piece. */
   cards: number;
+  /** Cards already in the deck (not written here) that are learned in this piece. */
+  ankiNew: number;
   /**
    * Time to learn this piece's new cards. Counted in the session's Anki item,
    * so it's not part of `minutes`, but it does take room in the session.
@@ -268,7 +276,7 @@ export interface PlanItem {
     newCards: number;
     learnMinutes: number;
     reviewMinutes: number;
-    /** Lectures whose cards were written in this session. */
+    /** Lectures whose new cards are learned in this session. */
     lectures: { chunkId: string; subjectId: string; title: string }[];
   };
 }

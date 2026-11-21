@@ -190,12 +190,17 @@ export function StepChips({ item }: { item: PlanItem }) {
           <Icon size={11} /> {text(key)}
         </span>
       ))}
+      {item.ankiNew > 0 && (
+        <span className="inline-flex items-center gap-1 whitespace-nowrap text-sky-600 dark:text-sky-400">
+          <Layers size={11} /> learn ~{item.ankiNew} cards in Anki
+        </span>
+      )}
     </span>
   );
 }
 
 function ChunkRow({ item, subject, compact }: { item: PlanItem; subject?: Subject; compact?: boolean }) {
-  const Icon = KIND_ICON[item.kind];
+  const Icon = item.minutes < 1 && item.ankiNew > 0 ? Layers : KIND_ICON[item.kind];
   return (
     <li className="flex items-center gap-3 rounded-xl px-2 py-1.5">
       <span
@@ -219,7 +224,8 @@ function ChunkRow({ item, subject, compact }: { item: PlanItem; subject?: Subjec
           )}
         </p>
       </div>
-      <span className="text-xs text-slate-500 tabular-nums">{formatMinutes(item.minutes)}</span>
+      {/* Learning-only pieces (cards already in the deck): the time is in the Anki row. */}
+      {item.minutes >= 1 && <span className="text-xs text-slate-500 tabular-nums">{formatMinutes(item.minutes)}</span>}
     </li>
   );
 }

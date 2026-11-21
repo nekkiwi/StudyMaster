@@ -5,7 +5,7 @@ import { diffPlans } from "../src/diff.js";
 import { planOnce, planWithEscalation } from "../src/scheduler.js";
 import { buildSlotGrid } from "../src/slots.js";
 import { DEFAULT_WEEK, dailySessions, withDefaults } from "../src/defaults.js";
-import type { PlanItem, Settings } from "../src/types.js";
+import { LEGACY_WORKFLOW, type PlanItem, type Settings } from "../src/types.js";
 import { validateState } from "../src/validate.js";
 import { chunks, state, subject } from "./helpers.js";
 
@@ -496,6 +496,61 @@ describe("real numbers from Anki", () => {
     // No pages or slides yet: the count is kept, progress isn't guessed.
     const bare = { id: "x", subjectId: "bio", title: "L", pages: 0, slides: 0, order: 9 };
     expect(applyAnkiCounts([bare], { x: 50 }, s)[0]).toMatchObject({ ankiCards: 50, done: {} });
+  });
+});
+
+describe("ready-made Anki decks", () => {
+  // Imported from Anki: no pages or slides, cards exist, most are still new.
+  const deck = (id: string, order: number, cards: number, fresh: number) => ({
+    id, subjectId: "ana", title: `Deck ${order}`, pages: 0, slides: 0, order, ankiCards: cards, ankiNew: fresh, done: { cards: 1 },
+  });
+  const anaState = (decks: ReturnType<typeof deck>[]) =>
+    state([subject("ana", "2027-03-01")], decks, { workflow: ["anki"] });
+
+  it("plans the time to learn the still-new cards (4000 cards ≈ 33 h)", async () => {
+    const { remainingMinutes, totalMinutes } = await import("../src/effort.js");
+    const st = anaState([deck("a", 1, 4000, 4000)]);
+    const plan = planOnce(st, MON, normal);
+    const learn = plan.sessions.flatMap((x) => x.items).filter((i) => i.kind === "anki").reduce((a, i) => a + i.anki!.learnMinutes, 0);
+    expect(learn).toBeGreaterThan(1900); // 4000 × 30 s = 2000 min
+    expect(learn).toBeLessThanOrEqual(2010);
+    const pieces = plan.sessions.flatMap((x) => x.items).filter((i) => i.chunkId === "a");
+    expect(pieces.length).toBeGreaterThan(10); // spread over many sessions
+    expect(pieces.reduce((a, i) => a + i.ankiNew, 0)).toBeGreaterThan(3990);
+    expect(remainingMinutes(st.chunks[0]!, st.subjects[0]!, st.settings)).toBe(2000);
+    expect(totalMinutes(st.chunks[0]!, st.subjects[0]!, st.settings)).toBe(2000);
+    // Even with "make cards" in the style, ready-made cards aren't writing work.
+    const withCards = { ...st.settings, workflow: [...LEGACY_WORKFLOW] };
+    expect(totalMinutes(st.chunks[0]!, st.subjects[0]!, withCards)).toBe(2000);
+  });
+
+  it("learned cards don't count again; only studied cards make reviews", async () => {
+    const { remainingMinutes, activeCards } = await import("../src/effort.js");
+    const st = anaState([deck("a", 1, 4000, 1000)]);
+    expect(remainingMinutes(st.chunks[0]!, st.subjects[0]!, st.settings)).toBe(500);
+    expect(activeCards(st.chunks[0]!, st.settings)).toBe(3000);
+    const done = anaState([deck("a", 1, 4000, 0)]);
+    expect(planOnce(done, MON, normal).sessions.flatMap((x) => x.items).some((i) => i.chunkId === "a")).toBe(false);
+  });
+
+  it("no Anki in the study style → no learning planned", () => {
+    const st = { ...anaState([deck("a", 1, 4000, 4000)]) };
+    st.settings = { ...st.settings, workflow: ["read"] };
+    expect(planOnce(st, MON, normal).sessions.flatMap((x) => x.items).some((i) => i.chunkId === "a")).toBe(false);
+  });
+
+  it("a check-in counts the learned cards down; Anki's reading sets the real number", async () => {
+    const { applyAnkiCounts } = await import("../src/checkin.js");
+    const st = anaState([deck("a", 1, 4000, 4000)]);
+    const plan = planOnce(st, MON, normal);
+    const learnedToday = itemsForDate(plan, MON).reduce((a, i) => a + i.ankiNew, 0);
+    expect(learnedToday).toBeGreaterThan(0);
+    const after = checkInDay(st.chunks, plan, MON, "yes");
+    expect(after[0]!.ankiNew).toBe(4000 - learnedToday);
+    // A "no" without finished pieces changes nothing.
+    expect(checkInDay(st.chunks, plan, MON, "no")[0]!.ankiNew).toBe(4000);
+    const read = applyAnkiCounts(after, { a: 4000 }, st.settings, { a: 3500 });
+    expect(read[0]!.ankiNew).toBe(3500);
   });
 });
 

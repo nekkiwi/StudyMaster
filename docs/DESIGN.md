@@ -221,6 +221,13 @@ between items for sections the reader missed.
   decks similar to existing items are **linked**, the rest become **new
   items** (each linked). Everything goes through the usual review list;
   changing "Add to …" re-matches against that subject (`ankiTarget`).
+- **Which level of sub-decks are the items** (`ankiDepth`, `chooseDepth`):
+  deep ready-made decks (e.g. `Anatomy::Upper limb::Shoulder`) would give a
+  few huge items at level 1. The import counts every level and picks the
+  first one where a typical sub-deck has at most 400 cards (no more than 150
+  items); the review offers the other levels ("Upper limb… (5) | Shoulder…
+  (25)"). Branches that end earlier keep their last deck, so no cards are
+  lost. Deeper items are titled by their path ("Upper limb – Shoulder").
 - **Subject editor → Anki deck:** choose the collection; unlinked items are
   matched automatically, each can be changed in a dropdown ("Whole subject
   deck" = no own deck), "Match by name" again, "Add N sub-decks as new items".
@@ -237,13 +244,22 @@ once a minute), every 5 minutes while visible, after linking changes, and on
 - **Links survive renaming:** links store Anki's deck id (`ankiDeckId`); a
   renamed deck (or parent) updates the stored name. Deck ids are the same on
   every synced device. Changing a link by hand drops the old id.
-- **Real card counts:** cards in each item's own deck → `Chunk.ankiCards`.
+- **Real card counts:** cards in each item's own deck (suspended ones left
+  out) → `Chunk.ankiCards`, and how many of them are still new (not studied)
+  → `Chunk.ankiNew`.
   The planner counts them as existing cards (reviews), "write cards"
   progress moves to cards found / cards expected (all → watch + read done
   too; progress never goes back) – `applyAnkiCounts` in core. Items without
   pages/slides (e.g. just imported from Anki) only keep the count – no
   progress is guessed. The "From Anki" import reads the counts right away and
-  shows them in the review ("50 cards in Anki").
+  shows them in the review ("220 cards in Anki · 198 new").
+- **Learning cards that are already in a deck** (ready-made decks): the
+  still-new cards (`ankiNew`) are planned as learning time
+  (`secondsPerNewCard`, default 30 s → 4000 cards ≈ 33 h) in session-sized
+  pieces ("Shoulder · learn ~198 cards in Anki"; the time is in the Anki row).
+  Writing ready-made cards (no pages/slides to write them from) is no work.
+  Check-ins count learned cards down; the next Anki reading sets the real
+  number. Only studied cards count for review estimates.
 - **Real Anki time:** review cards due per subject for today + 6 days
   (`is:due`, `prop:due=N`) → `ankiDue` (synced to the account). The planner
   uses them for those days (plus reviews of cards the plan adds) and keeps

@@ -5,7 +5,7 @@ import { todayISO } from "../lib/format";
 import { leaf } from "../lib/anki";
 import { useAccount } from "../account";
 import { readTocWithAi } from "../lib/aiImport";
-import { adoptEmptySubject, ankiTarget, applyAiToc, buildDraft, newDraftChunk, swapReader, draftFromToc, mergeChunks, type Draft, type DraftChunk, type DraftSubject } from "../lib/importer";
+import { adoptEmptySubject, ankiTarget, applyAiToc, depthChoices, setAnkiDepth, buildDraft, newDraftChunk, swapReader, draftFromToc, mergeChunks, type Draft, type DraftChunk, type DraftSubject } from "../lib/importer";
 import { useStore } from "../store";
 import { AnkiCollectionPicker, syncAnki } from "./ankiConnect";
 import { toast } from "./toast";
@@ -490,6 +490,26 @@ function Review({ draft, onChange, targetId }: { draft: Draft; onChange: (d: Dra
                   <Layers size={13} /> Anki deck <span className="font-mono">{subject.ankiDeck}</span>
                 </span>
               )}
+              {depthChoices(subject).length > 1 && (
+                <div className="basis-full space-y-1.5">
+                  <p className="text-xs font-medium text-slate-600 dark:text-slate-300">Which sub-decks are your items?</p>
+                  <Segmented
+                    value={subject.ankiDepth ?? 1}
+                    onChange={(depth) =>
+                      setSubject(subject.id, setAnkiDepth(subject, depth, existing.find((x) => x.id === subject.existingId), existingChunks, defaultRecording))
+                    }
+                    options={depthChoices(subject).map((c) => ({
+                      value: c.depth,
+                      label: (
+                        <span className="block truncate">
+                          {c.example}… <span className="font-normal opacity-70">({c.items})</span>
+                        </span>
+                      ),
+                      hint: `${c.items} items, e.g. ${c.example}`,
+                    }))}
+                  />
+                </div>
+              )}
             </header>
             )}
             {subject.tocText && <AiRead subject={subject} onChange={(next) => setSubject(subject.id, next)} />}
@@ -567,6 +587,7 @@ function Review({ draft, onChange, targetId }: { draft: Draft; onChange: (d: Dra
                     {chunk.ankiCards !== undefined && (
                       <Badge tone="indigo">
                         {chunk.ankiCards} card{chunk.ankiCards === 1 ? "" : "s"} in Anki
+                        {chunk.ankiNew ? ` · ${chunk.ankiNew === chunk.ankiCards ? "all" : chunk.ankiNew} new` : ""}
                       </Badge>
                     )}
                     {chunk.note && <Badge tone="amber">{chunk.note}</Badge>}

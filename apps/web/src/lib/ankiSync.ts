@@ -7,7 +7,7 @@
  * Pure helpers + one `readAnki` that talks to Anki.
  */
 import { addDays, type Chunk, type ISODate, type Subject } from "@studymaster/core";
-import { ankiDeckIds, countCards, deckForSubject, deckSearch, ownDeck, subdecks } from "./anki";
+import { ankiDeckIds, cardSearch, countCards, deckForSubject, deckSearch, linkedDepth, newCardSearch, ownDeck, relatedDecks, subdecks } from "./anki";
 
 /** Days of due counts read from Anki (today + 6). */
 export const FORECAST_DAYS = 7;
@@ -15,8 +15,10 @@ export const FORECAST_DAYS = 7;
 export interface AnkiReading {
   /** Deck name → Anki's deck id. */
   ids: Record<string, number>;
-  /** chunkId → cards in its own deck. */
+  /** chunkId → cards in its own deck (not suspended). */
   counts: Record<string, number>;
+  /** chunkId → cards in its own deck not studied yet. */
+  newCounts: Record<string, number>;
   /** subjectId → date → review cards due. */
   due: Record<string, Record<ISODate, number>>;
   /** subjectId → sub-decks of its collection that no item is linked to. */
@@ -57,35 +59,45 @@ export function dueQueries(deck: string): string[] {
   return Array.from({ length: FORECAST_DAYS }, (_, i) => (i === 0 ? `${d} is:due` : `${d} prop:due=${i}`));
 }
 
-/** Fills in how many cards each Anki deck of a draft has (one request). */
+/**
+ * Fills in how many cards each Anki deck of a draft has, and how many of them
+ * are still new (one request, every level so the level can be changed).
+ */
 export async function withCardCounts<
   T extends {
     subjects: {
       ankiSubdecks?: string[];
+      ankiDecks?: string[];
       ankiCounts?: Record<string, number>;
-      chunks: { ankiDeck?: string; ankiCards?: number }[];
-      links?: { deck: string; ankiCards?: number }[];
+      ankiNewCounts?: Record<string, number>;
+      chunks: { ankiDeck?: string; ankiCards?: number; ankiNew?: number }[];
+      links?: { deck: string; ankiCards?: number; ankiNew?: number }[];
     }[];
   },
 >(draft: T): Promise<T> {
   const decks = [
     ...new Set(
       draft.subjects
-        .flatMap((s) => [...(s.ankiSubdecks ?? []), ...s.chunks.map((c) => c.ankiDeck), ...(s.links ?? []).map((l) => l.deck)])
+        .flatMap((s) => [...(s.ankiDecks ?? s.ankiSubdecks ?? []), ...s.chunks.map((c) => c.ankiDeck), ...(s.links ?? []).map((l) => l.deck)])
         .filter((d): d is string => !!d),
     ),
   ];
   if (decks.length === 0) return draft;
-  const counts = await countCards(decks.map(deckSearch));
-  const of = new Map(decks.map((d, i) => [d, counts[i] ?? 0]));
+  const results = await countCards([...decks.map(cardSearch), ...decks.map(newCardSearch)]);
+  const of = new Map(decks.map((d, i) => [d, results[i] ?? 0]));
+  const fresh = new Map(decks.map((d, i) => [d, results[decks.length + i] ?? 0]));
   return {
     ...draft,
-    subjects: draft.subjects.map((s) => ({
-      ...s,
-      ankiCounts: Object.fromEntries((s.ankiSubdecks ?? []).map((d) => [d, of.get(d) ?? 0])),
-      chunks: s.chunks.map((c) => (c.ankiDeck ? { ...c, ankiCards: of.get(c.ankiDeck) } : c)),
-      links: s.links?.map((l) => ({ ...l, ankiCards: of.get(l.deck) })),
-    })),
+    subjects: draft.subjects.map((s) => {
+      const own = s.ankiDecks ?? s.ankiSubdecks ?? [];
+      return {
+        ...s,
+        ankiCounts: Object.fromEntries(own.map((d) => [d, of.get(d) ?? 0])),
+        ankiNewCounts: Object.fromEntries(own.map((d) => [d, fresh.get(d) ?? 0])),
+        chunks: s.chunks.map((c) => (c.ankiDeck ? { ...c, ankiCards: of.get(c.ankiDeck), ankiNew: fresh.get(c.ankiDeck) } : c)),
+        links: s.links?.map((l) => ({ ...l, ankiCards: of.get(l.deck), ankiNew: fresh.get(l.deck) })),
+      };
+    }),
   };
 }
 
@@ -101,15 +113,24 @@ export async function readAnki(subjects: Subject[], chunks: Chunk[], today: ISOD
     .filter((x): x is { id: string; deck: string } => exists(x.deck));
   const subjectDecks = fixed.subjects.map((s) => ({ id: s.id, deck: deckForSubject(s) })).filter((x) => exists(x.deck));
 
-  const queries = [...chunkDecks.map((x) => deckSearch(x.deck)), ...subjectDecks.flatMap((x) => dueQueries(x.deck))];
+  const queries = [
+    ...chunkDecks.map((x) => cardSearch(x.deck)),
+    ...chunkDecks.map((x) => newCardSearch(x.deck)),
+    ...subjectDecks.flatMap((x) => dueQueries(x.deck)),
+  ];
   const results = await countCards(queries);
 
   const counts: Record<string, number> = {};
-  chunkDecks.forEach((x, i) => (counts[x.id] = results[i] ?? 0));
+  const newCounts: Record<string, number> = {};
+  const n = chunkDecks.length;
+  chunkDecks.forEach((x, i) => {
+    counts[x.id] = results[i] ?? 0;
+    newCounts[x.id] = results[n + i] ?? 0;
+  });
   const due: Record<string, Record<ISODate, number>> = {};
   subjectDecks.forEach((x, k) => {
     const days: Record<ISODate, number> = {};
-    for (let i = 0; i < FORECAST_DAYS; i++) days[addDays(today, i)] = results[chunkDecks.length + k * FORECAST_DAYS + i] ?? 0;
+    for (let i = 0; i < FORECAST_DAYS; i++) days[addDays(today, i)] = results[2 * n + k * FORECAST_DAYS + i] ?? 0;
     due[x.id] = days;
   });
 
@@ -117,9 +138,10 @@ export async function readAnki(subjects: Subject[], chunks: Chunk[], today: ISOD
   const unlinked: Record<string, string[]> = {};
   for (const s of fixed.subjects) {
     if (!s.ankiDeck) continue;
-    const used = new Set(fixed.chunks.filter((c) => c.subjectId === s.id).map((c) => c.ankiDeck));
-    const free = subdecks(names, s.ankiDeck).filter((d) => !used.has(d));
+    const used = fixed.chunks.filter((c) => c.subjectId === s.id).map((c) => c.ankiDeck).filter((d): d is string => !!d);
+    // Same level as the linked decks; decks inside or around a linked one aren't "new".
+    const free = subdecks(names, s.ankiDeck, linkedDepth(s.ankiDeck, used)).filter((d) => !used.some((u) => relatedDecks(u, d)));
     if (free.length) unlinked[s.id] = free;
   }
-  return { ids, counts, due, unlinked };
+  return { ids, counts, newCounts, due, unlinked };
 }

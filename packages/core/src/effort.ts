@@ -63,6 +63,7 @@ export function ankiItem(
     pages: 0,
     slides: 0,
     cards: 0,
+    ankiNew: 0,
     learnMinutes: 0,
     deltas: { ...NO_STEPS },
     decks,
@@ -101,6 +102,15 @@ export function estimatedCards(chunk: Chunk, settings: Settings): number {
 }
 
 /**
+ * Cards the user writes for this chunk: as estimated, except for cards that
+ * came ready-made in a deck with no pages or slides to write them from.
+ */
+function cardsToWrite(chunk: Chunk, settings: Settings): number {
+  if (chunk.cards === undefined && guessedCards(chunk, settings) <= 0) return 0;
+  return estimatedCards(chunk, settings);
+}
+
+/**
  * Full effort per step in minutes; steps that aren't part of the study style
  * count 0. Everything except watching includes the subject weight.
  */
@@ -117,7 +127,7 @@ export function stepMinutes(
     watch: on.has("watch") ? (chunk.recordingMinutes ?? 0) * r.recordingFactor : 0,
     read: on.has("read") ? per(r.readPerPage, r.readPerSlide) : 0,
     summary: on.has("summary") ? per(r.summaryPerPage, r.summaryPerSlide) : 0,
-    cards: on.has("cards") ? estimatedCards(chunk, settings) * r.minutesPerCard * w : 0,
+    cards: on.has("cards") ? cardsToWrite(chunk, settings) * r.minutesPerCard * w : 0,
     revise: on.has("revise") ? per(r.revisePerPage, r.revisePerSlide) : 0,
   };
 }
@@ -126,20 +136,41 @@ export function doneFraction(chunk: Chunk, step: StepKey): number {
   return Math.min(1, Math.max(0, chunk.done?.[step] ?? 0));
 }
 
+/** Minutes to learn this many new cards (all their first repetitions). */
+export function learnCardMinutes(cards: number, settings: Settings): number {
+  return (Math.max(0, cards) * settings.anki.secondsPerNewCard) / 60;
+}
+
+/**
+ * Learning the cards that are already in the linked deck (read from Anki):
+ * all of them in total, the still-new ones remaining. Only with Anki in the
+ * study style.
+ */
+function deckLearnMinutes(chunk: Chunk, settings: Settings): { total: number; left: number } {
+  if (!usesAnki(settings) || (chunk.ankiCards === undefined && chunk.ankiNew === undefined)) return { total: 0, left: 0 };
+  const left = Math.max(0, chunk.ankiNew ?? 0);
+  return { total: learnCardMinutes(Math.max(chunk.ankiCards ?? 0, left), settings), left: learnCardMinutes(left, settings) };
+}
+
 export function totalMinutes(chunk: Chunk, subject: Subject, settings: Settings): number {
   const s = stepMinutes(chunk, subject, settings);
-  return STEPS.reduce((sum, k) => sum + s[k], 0);
+  return STEPS.reduce((sum, k) => sum + s[k], 0) + deckLearnMinutes(chunk, settings).total;
 }
 
 export function remainingMinutes(chunk: Chunk, subject: Subject, settings: Settings): number {
   const s = stepMinutes(chunk, subject, settings);
-  return STEPS.reduce((sum, k) => sum + s[k] * (1 - doneFraction(chunk, k)), 0);
+  return STEPS.reduce((sum, k) => sum + s[k] * (1 - doneFraction(chunk, k)), 0) + deckLearnMinutes(chunk, settings).left;
 }
 
 /** Anki cards that already exist for this chunk (the real count from Anki if known). */
 export function cardsMade(chunk: Chunk, settings: Settings): number {
   if (chunk.ankiCards !== undefined) return chunk.ankiCards;
   return estimatedCards(chunk, settings) * doneFraction(chunk, "cards");
+}
+
+/** Existing cards that are already being studied (made, minus Anki's still-new ones). */
+export function activeCards(chunk: Chunk, settings: Settings): number {
+  return Math.max(0, cardsMade(chunk, settings) - (chunk.ankiNew ?? 0));
 }
 
 /** Biggest piece a single session can hold next to its Anki item. */
@@ -152,11 +183,17 @@ export function maxPieceMinutes(settings: Settings): number {
  * the head takes the first `headCost` minutes of room, the tail the rest.
  */
 export function cutItem(item: PlanItem, headCost: number, order: readonly StepKey[] = STEPS): [PlanItem, PlanItem] {
-  const head: PlanItem = { ...item, steps: { ...NO_STEPS }, deltas: { ...NO_STEPS }, minutes: 0, pages: 0, slides: 0, cards: 0, learnMinutes: 0 };
-  const tail: PlanItem = { ...item, steps: { ...NO_STEPS }, deltas: { ...NO_STEPS }, minutes: 0, pages: 0, slides: 0, cards: 0, learnMinutes: 0 };
+  const empty = { steps: { ...NO_STEPS }, deltas: { ...NO_STEPS }, minutes: 0, pages: 0, slides: 0, cards: 0, ankiNew: 0, learnMinutes: 0 };
+  const head: PlanItem = { ...item, ...empty, steps: { ...NO_STEPS }, deltas: { ...NO_STEPS } };
+  const tail: PlanItem = { ...item, ...empty, steps: { ...NO_STEPS }, deltas: { ...NO_STEPS } };
+  // Learning time: the cards written here go with "make cards", the cards
+  // already in the deck come last.
+  const allCards = item.cards + item.ankiNew;
+  const writtenLearn = allCards > 0 ? (item.learnMinutes * item.cards) / allCards : 0;
+  const deckLearn = item.learnMinutes - writtenLearn;
   let left = Math.max(0, headCost);
   for (const k of order) {
-    const cost = item.steps[k] + (k === "cards" ? item.learnMinutes : 0);
+    const cost = item.steps[k] + (k === "cards" ? writtenLearn : 0);
     if (cost <= 0) continue;
     const f = Math.min(1, left / cost);
     left -= cost * f;
@@ -170,8 +207,15 @@ export function cutItem(item: PlanItem, headCost: number, order: readonly StepKe
       }
       if (k === "cards") {
         part.cards = item.cards * share;
-        part.learnMinutes = item.learnMinutes * share;
+        part.learnMinutes += writtenLearn * share;
       }
+    }
+  }
+  if (deckLearn > 0) {
+    const f = Math.min(1, left / deckLearn);
+    for (const [part, share] of [[head, f], [tail, 1 - f]] as const) {
+      part.ankiNew = item.ankiNew * share;
+      part.learnMinutes += deckLearn * share;
     }
   }
   return [head, tail];
@@ -192,7 +236,12 @@ export function splitChunk(chunk: Chunk, subject: Subject, settings: Settings): 
   const steps: Record<StepKey, number> = { ...NO_STEPS };
   for (const k of STEPS) steps[k] = full[k] * left[k];
   const work = STEPS.reduce((sum, k) => sum + steps[k], 0);
-  if (work < 0.5) return [];
+  // Learning: the cards still to write (when Anki is studied) plus the cards
+  // already in the deck that are still new (e.g. a ready-made deck).
+  const writeCards = steps.cards > 0 ? cards * left.cards : 0;
+  const deckNew = usesAnki(settings) ? Math.max(0, chunk.ankiNew ?? 0) : 0;
+  const learn = usesAnki(settings) ? learnCardMinutes(writeCards + deckNew, settings) : 0;
+  if (work + learn < 0.5) return [];
 
   const whole: PlanItem = {
     kind: chunkKind(chunk),
@@ -206,9 +255,10 @@ export function splitChunk(chunk: Chunk, subject: Subject, settings: Settings): 
     steps,
     pages: chunk.pages * left.read,
     slides: chunk.slides * left.read,
-    cards: steps.cards > 0 ? cards * left.cards : 0,
+    cards: writeCards,
+    ankiNew: deckNew,
     // Learning the new cards is reserved with the piece – only when Anki is studied.
-    learnMinutes: steps.cards > 0 && usesAnki(settings) ? (cards * left.cards * settings.anki.secondsPerNewCard) / 60 : 0,
+    learnMinutes: learn,
     deltas: left,
   };
 

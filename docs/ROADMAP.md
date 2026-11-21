@@ -21,6 +21,9 @@
   ▶ Anki opens exactly the linked deck.
 - ✅ ▶ Anki on every device: connect-and-open dialog on computers, Safari
   note, AnkiMobile study link, AnkiDroid deck link.
+- ✅ Ready-made decks: still-new cards are planned as learning time; the
+  Anki import picks the sub-deck level (deep decks → smaller items) and lets
+  you change it.
 - ✅ Anki structure + numbers: deck ids (renames), real card counts, due
   counts in the plan, sub-decks for new lectures, new sub-decks suggested.
 - ✅ Import inside the subject editor.

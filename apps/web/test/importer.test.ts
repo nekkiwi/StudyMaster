@@ -206,6 +206,67 @@ describe("Anki decks", () => {
     ]);
   });
 
+  // A big ready-made deck: regions with many sections each.
+  const ANATOMY = [
+    "Anatomy",
+    ...["Upper limb", "Lower limb", "Thorax"].flatMap((region) => [
+      `Anatomy::${region}`,
+      ...Array.from({ length: 6 }, (_, i) => `Anatomy::${region}::Section ${i + 1}`),
+    ]),
+    "Anatomy::Extras", // a branch without sections
+  ];
+
+  it("offers deeper deck levels and keeps short branches", async () => {
+    const { subdecks, maxDepth, chooseDepth, sectionTitle } = await import("../src/lib/anki.js");
+    expect(maxDepth(ANATOMY, "Anatomy")).toBe(2);
+    expect(subdecks(ANATOMY, "Anatomy")).toEqual(["Anatomy::Upper limb", "Anatomy::Lower limb", "Anatomy::Thorax", "Anatomy::Extras"]);
+    const level2 = subdecks(ANATOMY, "Anatomy", 2);
+    expect(level2).toHaveLength(19); // 18 sections + Extras
+    expect(level2).toContain("Anatomy::Extras");
+    expect(sectionTitle("Anatomy", "Anatomy::Upper limb::Section 1")).toBe("Upper limb – Section 1");
+    // ~1300 cards per region → sections (~220 each) become the items.
+    const counts: Record<string, number> = {};
+    for (const d of level2) counts[d] = 220;
+    for (const r of ["Upper limb", "Lower limb", "Thorax"]) counts[`Anatomy::${r}`] = 1320;
+    expect(chooseDepth(ANATOMY, "Anatomy", counts)).toBe(2);
+    // Small decks or unknown counts stay on the first level.
+    expect(chooseDepth(ANATOMY, "Anatomy", {})).toBe(1);
+  });
+
+  it("imports a ready-made deck at the chosen level with its new cards", async () => {
+    const { draftFromAnki, withBestDepth, depthChoices, setAnkiDepth } = await import("../src/lib/importer.js");
+    const draft = draftFromAnki(ANATOMY, ["Anatomy"], [], [], TODAY, 60);
+    expect(draft.subjects[0]!.chunks).toHaveLength(4);
+    // As read from Anki (withCardCounts): every level, total and still new.
+    const decks = draft.subjects[0]!.ankiDecks!;
+    const counted = {
+      ...draft,
+      subjects: [{
+        ...draft.subjects[0]!,
+        ankiCounts: Object.fromEntries(decks.map((d) => [d, d.split("::").length === 3 ? 220 : 1320])),
+        ankiNewCounts: Object.fromEntries(decks.map((d) => [d, d.split("::").length === 3 ? 200 : 1200])),
+      }],
+    };
+    const best = withBestDepth(counted, [], [], 0).subjects[0]!;
+    expect(best.ankiDepth).toBe(2);
+    expect(best.chunks).toHaveLength(19);
+    expect(best.chunks[0]).toMatchObject({ title: "Upper limb – Section 1", ankiCards: 220, ankiNew: 200, pages: 0, recordingMinutes: 0 });
+    expect(depthChoices(best).map((c) => [c.depth, c.items, c.example])).toEqual([[1, 4, "Upper limb"], [2, 19, "Section 1"]]);
+    // Switching back to the regions.
+    expect(setAnkiDepth(best, 1, undefined, [], 0).chunks.map((c) => c.title)).toEqual(["Upper limb", "Lower limb", "Thorax", "Extras"]);
+
+    // Importing: cards count as made, the new ones get learning time in the plan.
+    const { useStore } = await import("../src/store.js");
+    const { remainingMinutes, withDefaults } = await import("@studymaster/core");
+    useStore.setState({ subjects: [], chunks: [], settings: withDefaults() });
+    useStore.getState().importDraft({ ...counted, subjects: [best] });
+    const st = useStore.getState();
+    const first = st.chunks[0]!;
+    expect(first).toMatchObject({ ankiCards: 220, ankiNew: 200, done: { cards: 1 } });
+    // 200 new cards × 30 s = 100 min, nothing else to do.
+    expect(remainingMinutes(first, st.subjects[0]!, st.settings)).toBe(100);
+  });
+
   it("names decks Subject::Lecture without breaking Anki's separator", async () => {
     const { deckName } = await import("../src/lib/anki.js");
     expect(deckName("Biology", "Lecture 3")).toBe("Biology::Lecture 3");

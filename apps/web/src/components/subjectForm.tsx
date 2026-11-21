@@ -216,7 +216,11 @@ function ChunkRow({
           />
           </span>
           cards
-          {chunk.ankiCards !== undefined && <span className="text-sky-600 dark:text-sky-400">· {chunk.ankiCards} in Anki</span>}
+          {chunk.ankiCards !== undefined && (
+            <span className="text-sky-600 dark:text-sky-400">
+              · {chunk.ankiCards} in Anki{chunk.ankiNew ? `, ${chunk.ankiNew} not studied yet` : ""}
+            </span>
+          )}
         </label>
         <span className="text-xs text-slate-400">{done ? "done" : `${formatMinutes(left)} left of ${formatMinutes(minutes)}`}</span>
         <span className="ml-auto flex items-center gap-0.5">

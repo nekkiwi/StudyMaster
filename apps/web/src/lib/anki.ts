@@ -174,16 +174,100 @@ export function collections(names: string[]): string[] {
   return [...new Set(structureFromDecks(names).map((s) => s.subject))].sort((a, b) => a.localeCompare(b));
 }
 
-/** Direct sub-decks of a collection, as full names ("Biology::Lecture 3"). */
-export function subdecks(names: string[], collection: string): string[] {
+/** Path of a deck below a collection: "Ana::Arm::Shoulder" → ["Arm", "Shoulder"]. */
+function below(collection: string, deck: string): string[] {
   const prefix = `${collection}::`;
+  if (!deck.startsWith(prefix)) return [];
+  return deck.slice(prefix.length).split("::").map((x) => x.trim());
+}
+
+/** Every deck below a collection (all levels), as full names, in Anki's order. */
+export function descendants(names: string[], collection: string): string[] {
   const seen = new Set<string>();
   for (const n of names) {
-    if (!n.startsWith(prefix)) continue;
-    const second = n.slice(prefix.length).split("::")[0]!.trim();
-    if (second) seen.add(`${prefix}${second}`);
+    const parts = below(collection, n);
+    // Parents without an own entry still count ("A::B::C" implies "A::B").
+    for (let i = 1; i <= parts.length; i++) if (parts.slice(0, i).every(Boolean)) seen.add(`${collection}::${parts.slice(0, i).join("::")}`);
   }
   return [...seen];
+}
+
+/** How many levels below the collection a deck is ("Ana::Arm::Shoulder" → 2). */
+export function deckDepth(collection: string, deck: string): number {
+  return below(collection, deck).length;
+}
+
+/**
+ * Sub-decks of a collection at one level, as full names. Level 1 = direct
+ * sub-decks ("Biology::Lecture 3"); level 2 = their sub-decks, and so on.
+ * Branches that end earlier keep their last deck, so no cards are left out.
+ */
+export function subdecks(names: string[], collection: string, depth = 1): string[] {
+  const all = descendants(names, collection);
+  return all.filter((d) => {
+    const n = deckDepth(collection, d);
+    if (n === depth) return true;
+    return n < depth && !all.some((x) => x.startsWith(`${d}::`));
+  });
+}
+
+/** Deepest level below a collection. */
+export function maxDepth(names: string[], collection: string): number {
+  return Math.max(0, ...descendants(names, collection).map((d) => deckDepth(collection, d)));
+}
+
+/** The level most linked decks of a subject are on (1 if none). */
+export function linkedDepth(collection: string, decks: (string | undefined)[]): number {
+  const counts = new Map<number, number>();
+  for (const d of decks) {
+    const n = d ? deckDepth(collection, d) : 0;
+    if (n > 0) counts.set(n, (counts.get(n) ?? 0) + 1);
+  }
+  let best = 1;
+  for (const [n, c] of counts) if (c > (counts.get(best) ?? 0)) best = n;
+  return best;
+}
+
+/** True if one deck contains the other (or they're the same). */
+export function relatedDecks(a: string, b: string): boolean {
+  return a === b || a.startsWith(`${b}::`) || b.startsWith(`${a}::`);
+}
+
+/** Item title for a sub-deck: its path below the collection ("Arm – Shoulder"). */
+export function sectionTitle(collection: string, deck: string): string {
+  const parts = below(collection, deck);
+  return parts.length ? parts.join(" – ") : leaf(deck);
+}
+
+/** Cards per item we aim for when choosing a level automatically. */
+export const CARDS_PER_SECTION = 400;
+
+/**
+ * The level to use as items: the first one where a typical section has at
+ * most CARDS_PER_SECTION cards (huge decks like a whole anatomy course go
+ * deeper), without making hundreds of items. Level 1 if counts are unknown.
+ */
+export function chooseDepth(names: string[], collection: string, counts: Record<string, number>): number {
+  const deepest = maxDepth(names, collection);
+  for (let depth = 1; depth <= deepest; depth++) {
+    const decks = subdecks(names, collection, depth);
+    const sizes = decks.map((d) => counts[d] ?? 0).sort((a, b) => a - b);
+    const median = sizes[Math.floor(sizes.length / 2)] ?? 0;
+    if (median <= CARDS_PER_SECTION) return depth;
+    const next = depth < deepest ? subdecks(names, collection, depth + 1).length : Infinity;
+    if (next > 150) return depth;
+  }
+  return Math.max(1, deepest);
+}
+
+/** Cards of a deck that will be studied (suspended ones left out). */
+export function cardSearch(deck: string): string {
+  return `${deckSearch(deck)} -is:suspended`;
+}
+
+/** Cards of a deck that haven't been studied yet. */
+export function newCardSearch(deck: string): string {
+  return `${deckSearch(deck)} is:new -is:suspended`;
 }
 
 /** Last part of a deck name: "Biology::Lecture 3" → "Lecture 3". */

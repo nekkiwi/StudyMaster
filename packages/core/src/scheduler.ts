@@ -7,7 +7,7 @@ import {
   workSteps,
   dueReviewMinutes,
   sessionShare,
-  cardsMade,
+  activeCards,
   cutItem,
   itemCost,
   isAnkiItem,
@@ -179,7 +179,8 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
   // Step 3: walk the grid in time order.
   // Cards made per subject (real counts from Anki where known).
   const made = new Map(subjects.map((x) => [x.id, 0]));
-  for (const c of state.chunks) if (made.has(c.subjectId)) made.set(c.subjectId, made.get(c.subjectId)! + cardsMade(c, s));
+  // Cards already being studied; still-new deck cards join once they're learned.
+  for (const c of state.chunks) if (made.has(c.subjectId)) made.set(c.subjectId, made.get(c.subjectId)! + activeCards(c, s));
   const startMade = new Map(made);
   const pending = new Map<string, number>();
   /**
@@ -330,7 +331,7 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
       items.push(item);
       capLeft -= itemCost(item);
       remaining.set(best.id, remaining.get(best.id)! - itemCost(item));
-      pending.set(best.id, (pending.get(best.id) ?? 0) + item.cards);
+      pending.set(best.id, (pending.get(best.id) ?? 0) + item.cards + item.ankiNew);
     }
 
     if (items.length > 0) {
@@ -340,9 +341,9 @@ export function planOnce(state: StudyState, from: ISODate, options: PlanOptions)
       const anki_ = ankiItem(slot.slot, [...new Set(work.map((x) => x.subjectId))], {
         reviewMinutes: anki,
         learnMinutes: work.reduce((sum, x) => sum + x.learnMinutes, 0),
-        newCards: work.reduce((sum, x) => sum + x.cards, 0),
+        newCards: work.reduce((sum, x) => sum + x.cards + x.ankiNew, 0),
         lectures: work
-          .filter((x) => x.steps.cards > 0)
+          .filter((x) => x.steps.cards > 0 || x.ankiNew > 0)
           .map((x) => ({ chunkId: x.chunkId, subjectId: x.subjectId, title: x.baseTitle }))
           .filter((x, i, all) => all.findIndex((y) => y.chunkId === x.chunkId) === i),
       });
@@ -438,6 +439,7 @@ function mergeSameChunk(items: PlanItem[]): PlanItem[] {
         pages: last.pages + item.pages,
         slides: last.slides + item.slides,
         cards: last.cards + item.cards,
+        ankiNew: last.ankiNew + item.ankiNew,
         learnMinutes: last.learnMinutes + item.learnMinutes,
         steps: sum((x) => x.steps),
         deltas: sum((x) => x.deltas),
@@ -474,6 +476,7 @@ function roundItem(item: PlanItem): PlanItem {
     pages: Math.round(item.pages),
     slides: Math.round(item.slides),
     cards: Math.round(item.cards),
+    ankiNew: Math.round(item.ankiNew),
     learnMinutes: Math.round(item.learnMinutes),
     steps: Object.fromEntries(STEPS.map((k) => [k, Math.round(item.steps[k])])) as Record<StepKey, number>,
   };

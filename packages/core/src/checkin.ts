@@ -40,6 +40,11 @@ export function applyResults(chunks: Chunk[], results: ItemResult[]): Chunk[] {
       const next = (chunk.done[step] ?? 0) + result.item.deltas[step] * fraction;
       chunk.done[step] = next > 0.999 ? 1 : Math.min(1, next);
     }
+    // Deck cards learned: counted down until Anki is read again.
+    const learned = !result.steps || STEPS.every((k) => result.item.steps[k] <= 0 || result.steps!.includes(k));
+    if (learned && result.item.ankiNew > 0 && chunk.ankiNew !== undefined) {
+      chunk.ankiNew = Math.max(0, Math.round(chunk.ankiNew - result.item.ankiNew * fraction));
+    }
   }
   return chunks.map((c) => changed.get(c.id) ?? c);
 }
@@ -80,11 +85,18 @@ export function setCardsMade(chunks: Chunk[], chunkId: string, cards: number): C
  * earlier steps (watch, read) count as done too. Progress never goes back.
  * Returns the same array if nothing changed.
  */
-export function applyAnkiCounts(chunks: Chunk[], counts: Record<string, number>, settings: Settings): Chunk[] {
+export function applyAnkiCounts(
+  chunks: Chunk[],
+  counts: Record<string, number>,
+  settings: Settings,
+  /** chunkId → cards in its deck not studied yet. */
+  newCounts: Record<string, number> = {},
+): Chunk[] {
   let changed = false;
   const out = chunks.map((chunk) => {
     const n = counts[chunk.id];
     if (n === undefined) return chunk;
+    const fresh = newCounts[chunk.id];
     const expected = chunk.cards ?? guessedCards(chunk, settings);
     const done = { ...chunk.done };
     if (n > 0 && expected <= 0) {
@@ -101,10 +113,12 @@ export function applyAnkiCounts(chunks: Chunk[], counts: Record<string, number>,
       }
     }
     const same =
-      chunk.ankiCards === n && STEPS.every((k) => (chunk.done?.[k] ?? 0) === (done[k] ?? 0));
+      chunk.ankiCards === n &&
+      (fresh === undefined || chunk.ankiNew === fresh) &&
+      STEPS.every((k) => (chunk.done?.[k] ?? 0) === (done[k] ?? 0));
     if (same) return chunk;
     changed = true;
-    return { ...chunk, ankiCards: n, done };
+    return { ...chunk, ankiCards: n, ...(fresh !== undefined ? { ankiNew: fresh } : {}), done };
   });
   return changed ? out : chunks;
 }

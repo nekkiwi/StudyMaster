@@ -14,6 +14,7 @@ import {
   detectPlatform,
   isDesktopSafari,
   leaf,
+  linkedDepth,
   matchDecks,
   openDeckOnDesktop,
   phoneAnkiLink,
@@ -24,7 +25,7 @@ import {
 import { readAnki, withCardCounts } from "../lib/ankiSync";
 import { useDevice } from "../lib/device";
 import { newId, todayISO } from "../lib/format";
-import { draftFromAnki, lectureNumber, type Draft } from "../lib/importer";
+import { draftFromAnki, lectureNumber, withBestDepth, type Draft } from "../lib/importer";
 import { useStore } from "../store";
 import { ImportDialog } from "./importer";
 import { toast } from "./toast";
@@ -464,7 +465,7 @@ export function AnkiCollectionPicker({ onDraft }: { onDraft: (draft: Draft) => v
             const draft = draftFromAnki(names, chosen, subjects, chunks, todayISO(), defaultRecording);
             setCounting(true);
             try {
-              onDraft(await withCardCounts(draft));
+              onDraft(withBestDepth(await withCardCounts(draft), subjects, chunks, defaultRecording));
             } catch {
               onDraft(draft); // counts come with the next read from Anki
             } finally {
@@ -530,13 +531,13 @@ export function SubjectAnkiLink({ subject }: { subject: Subject }) {
   }
 
   const all = collections(names);
-  const decks = subject.ankiDeck ? subdecks(names, subject.ankiDeck) : [];
+  const decks = subject.ankiDeck ? subdecks(names, subject.ankiDeck, linkedDepth(subject.ankiDeck, own.map((c) => c.ankiDeck))) : [];
   const used = new Set(own.map((c) => c.ankiDeck).filter(Boolean));
   const unused = decks.filter((d) => !used.has(d));
 
   /** Links the unlinked items to sub-decks with similar names. */
   const autoMatch = (collection: string, current = own) => {
-    const subs = subdecks(names, collection);
+    const subs = subdecks(names, collection, linkedDepth(collection, current.map((c) => c.ankiDeck)));
     const taken = new Set(current.map((c) => c.ankiDeck).filter(Boolean));
     const found = matchDecks(current.filter((c) => !c.ankiDeck && !c.ankiNoDeck), subs.filter((d) => !taken.has(d)));
     for (const c of current) if (found.has(c.id)) upsertChunk({ ...c, ankiDeck: found.get(c.id) });

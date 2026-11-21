@@ -174,14 +174,21 @@ export const useStore = create<Store>()(
             const i = subjects.findIndex((x) => x.id === subjectId);
             subjects[i] = relinked(subjects[i]!, { ...subjects[i]!, ankiDeck: d.ankiDeck });
           }
+          const counts: Record<string, number> = {};
+          const newCounts: Record<string, number> = {};
           for (const l of links) {
             const i = chunks.findIndex((c) => c.id === l.chunkId);
             if (i >= 0) chunks[i] = relinked(chunks[i]!, { ...chunks[i]!, ankiDeck: l.deck, ankiNoDeck: undefined });
+            if (i >= 0 && l.ankiCards !== undefined) counts[l.chunkId] = l.ankiCards;
+            if (i >= 0 && l.ankiNew !== undefined) newCounts[l.chunkId] = l.ankiNew;
           }
           let order = Math.max(0, ...chunks.filter((c) => c.subjectId === subjectId).map((c) => c.order));
           for (const c of picked) {
+            const id = newId();
+            if (c.ankiCards !== undefined) counts[id] = c.ankiCards;
+            if (c.ankiNew !== undefined) newCounts[id] = c.ankiNew;
             chunks.push({
-              id: newId(),
+              id,
               subjectId,
               title: c.title.trim(),
               recordingMinutes: Math.max(0, Math.round(c.recordingMinutes)),
@@ -189,10 +196,12 @@ export const useStore = create<Store>()(
               slides: Math.max(0, Math.round(c.slides)),
               order: ++order,
               ...(c.ankiDeck ? { ankiDeck: c.ankiDeck } : {}),
-              ...(c.ankiCards !== undefined ? { ankiCards: c.ankiCards } : {}),
             });
             added++;
           }
+          // Cards that already exist count as made; still-new ones get learning time.
+          const updated = applyAnkiCounts(chunks, counts, state.settings, newCounts);
+          chunks.splice(0, chunks.length, ...updated);
         }
         set({ subjects, chunks });
         return { subjects: newSubjects, chunks: added };
@@ -225,10 +234,10 @@ export const useStore = create<Store>()(
         set((s) => {
           // Re-apply on the current data: it may have changed while Anki was read.
           const fixed = reconcileDecks(s.subjects, s.chunks, reading.ids);
-          let chunks = applyAnkiCounts(fixed.chunks, reading.counts, s.settings);
+          let chunks = applyAnkiCounts(fixed.chunks, reading.counts, s.settings, reading.newCounts ?? {});
           // Chapters without an own deck in Anki (any more) have no Anki count.
           if (chunks.some((c) => c.ankiCards !== undefined && reading.counts[c.id] === undefined)) {
-            chunks = chunks.map((c) => (c.ankiCards !== undefined && reading.counts[c.id] === undefined ? { ...c, ankiCards: undefined } : c));
+            chunks = chunks.map((c) => (c.ankiCards !== undefined && reading.counts[c.id] === undefined ? { ...c, ankiCards: undefined, ankiNew: undefined } : c));
           }
           const sameDue = JSON.stringify(s.ankiDue ?? {}) === JSON.stringify(reading.due);
           return {

@@ -6,7 +6,7 @@
  * Everything here is pure – reading the files happens in fileReaders.ts.
  */
 import { addDays, type ISODate, type Subject } from "@studymaster/core";
-import { leaf, matchDecks, subdecks } from "./anki";
+import { chooseDepth, deckDepth, descendants, leaf, matchDecks, maxDepth, sectionTitle, subdecks } from "./anki";
 
 /** What we learned from one file. */
 export interface DetectedFile {
@@ -49,6 +49,8 @@ export interface DraftChunk {
   ankiDeck?: string;
   /** Cards in that deck right now (imports from Anki). */
   ankiCards?: number;
+  /** Of those, cards not studied yet. */
+  ankiNew?: number;
 }
 
 /** An existing chapter that will be linked to an Anki deck. */
@@ -59,6 +61,8 @@ export interface DraftLink {
   include: boolean;
   /** Cards in that deck right now. */
   ankiCards?: number;
+  /** Of those, cards not studied yet. */
+  ankiNew?: number;
 }
 
 export interface DraftSubject {
@@ -74,10 +78,16 @@ export interface DraftSubject {
   ankiDeck?: string;
   /** Existing chapters of this subject that get linked to Anki decks. */
   links?: DraftLink[];
-  /** All sub-decks of the linked collection (to rebuild links when the target changes). */
+  /** Sub-decks of the linked collection at the chosen level (to rebuild links when the target changes). */
   ankiSubdecks?: string[];
-  /** Cards per sub-deck, read from Anki. */
+  /** Every deck below the collection, all levels. */
+  ankiDecks?: string[];
+  /** Which level of sub-decks become items (1 = direct sub-decks). */
+  ankiDepth?: number;
+  /** Cards per deck (all levels), read from Anki. */
   ankiCounts?: Record<string, number>;
+  /** Cards not studied yet per deck. */
+  ankiNewCounts?: Record<string, number>;
   /** Text of the table of contents these chapters came from (for "Let AI read the contents"). */
   tocText?: string;
   /** Last page of the book, if the user entered it (pasted contents). */
@@ -546,7 +556,9 @@ export function draftFromAnki(
       examDate: addDays(today, 42),
       chunks: [],
       ankiDeck: collection,
-      ankiSubdecks: subdecks(deckNames, collection),
+      ankiDecks: descendants(deckNames, collection),
+      ankiDepth: 1,
+      ankiSubdecks: subdecks(deckNames, collection, 1),
     };
     return ankiTarget(base, match, existingChunks, defaultRecordingMinutes);
   });
@@ -573,13 +585,20 @@ export function ankiTarget(d: DraftSubject, target: Subject | undefined, existin
     name: target?.name ?? d.name,
     links: own
       .filter((c) => links.has(c.id))
-      .map((c) => ({ chunkId: c.id, title: c.title, deck: links.get(c.id)!, include: true, ankiCards: d.ankiCounts?.[links.get(c.id)!] })),
+      .map((c) => ({
+        chunkId: c.id,
+        title: c.title,
+        deck: links.get(c.id)!,
+        include: true,
+        ankiCards: d.ankiCounts?.[links.get(c.id)!],
+        ankiNew: d.ankiNewCounts?.[links.get(c.id)!],
+      })),
     chunks: free
       .filter((x) => !linkedDecks.has(x))
       .map((deck) => ({
         id: draftId(),
         include: true,
-        title: leaf(deck),
+        title: d.ankiDeck ? sectionTitle(d.ankiDeck, deck) : leaf(deck),
         // Importing Anki decks is about the cards; video, pages or slides can be added later.
         recordingMinutes: 0,
         pages: 0,
@@ -588,8 +607,48 @@ export function ankiTarget(d: DraftSubject, target: Subject | undefined, existin
         number: lectureNumber(leaf(deck)),
         ankiDeck: deck,
         ankiCards: d.ankiCounts?.[deck],
+        ankiNew: d.ankiNewCounts?.[deck],
       })),
   };
+}
+
+/** Picks the level of sub-decks per subject from the card counts (see chooseDepth). */
+export function withBestDepth(draft: Draft, existing: Subject[], existingChunks: ExistingChunk[], defaultRecordingMinutes: number): Draft {
+  return {
+    ...draft,
+    subjects: draft.subjects.map((d) => {
+      if (!d.ankiDeck || !d.ankiDecks) return d;
+      const depth = chooseDepth(d.ankiDecks, d.ankiDeck, d.ankiCounts ?? {});
+      if (depth === (d.ankiDepth ?? 1)) return d;
+      return setAnkiDepth(d, depth, existing.find((s) => s.id === d.existingId), existingChunks, defaultRecordingMinutes);
+    }),
+  };
+}
+
+/** Uses another level of sub-decks as items (e.g. "Shoulder" instead of "Upper limb"). */
+export function setAnkiDepth(
+  d: DraftSubject,
+  depth: number,
+  target: Subject | undefined,
+  existingChunks: ExistingChunk[],
+  defaultRecordingMinutes: number,
+): DraftSubject {
+  if (!d.ankiDeck || !d.ankiDecks) return d;
+  const next = { ...d, ankiDepth: depth, ankiSubdecks: subdecks(d.ankiDecks, d.ankiDeck, depth) };
+  return ankiTarget(next, target, existingChunks, defaultRecordingMinutes);
+}
+
+/** The levels a draft's collection offers: how many items each gives, with an example. */
+export function depthChoices(d: DraftSubject): { depth: number; items: number; example: string }[] {
+  if (!d.ankiDeck || !d.ankiDecks) return [];
+  const deepest = maxDepth(d.ankiDecks, d.ankiDeck);
+  const out: { depth: number; items: number; example: string }[] = [];
+  for (let depth = 1; depth <= Math.min(deepest, 4); depth++) {
+    const decks = subdecks(d.ankiDecks, d.ankiDeck, depth);
+    const example = decks.find((x) => deckDepth(d.ankiDeck!, x) === depth) ?? decks[0];
+    out.push({ depth, items: decks.length, example: example ? leaf(example) : "" });
+  }
+  return out;
 }
 
 /** What the AI returns for a table of contents (see apps/api/src/toc.ts). */
