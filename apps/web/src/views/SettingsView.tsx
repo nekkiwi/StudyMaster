@@ -110,7 +110,7 @@ export function SettingsView() {
           <Section title="Days off" description="Vacation, breaks, sick days: nothing gets planned on these.">
             <DaysOffEditor />
           </Section>
-          <Section title="Anki app" description="Open the right deck with one tap, create decks, or import subjects from Anki.">
+          <Section title="Anki" description="Open the right deck with one tap – in the Anki app or on AnkiWeb.">
             <AnkiConnectSection />
           </Section>
           <Section title="Anki timing" description="Every session ends with Anki: the new cards plus reviews." collapsible>

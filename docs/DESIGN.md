@@ -192,7 +192,16 @@ only Anki tasks open the **subject's deck**:
 | iPhone / iPad (AnkiMobile 25.07+) | AnkiMobile starts studying exactly that deck | `anki://x-callback-url/study?deck=<full deck name>` (AnkiMobile 25.07 release notes) |
 | Android (AnkiDroid 2.25+) | AnkiDroid opens on **exactly that deck's cards** (card browser) – not the study screen | `intent://x-callback-url/browser?search=deck:"…"#Intent;scheme=anki;package=com.ichi2.anki;end`; older/missing AnkiDroid → Play Store. Chrome only opens BROWSABLE activities, and AnkiDroid's "review deck" intent (`EXTRA_DECK_ID`) isn't one. Exact study needs a `study` deep link in AnkiDroid (like AnkiMobile's) or our own Android app. |
 
-**Connecting (desktop, Settings → Anki app):** install AnkiConnect, keep Anki
+**AnkiWeb only (no Anki app):** per device, Settings → Anki → "How do you
+study Anki on this device?" → **AnkiWeb (browser)** (also offered as "I only
+use AnkiWeb" in the dialog of the first ▶ press). ▶ Anki then opens AnkiWeb's
+deck list in a new tab and says which deck to open ("In AnkiWeb, open “Bio
+WS26” › “VL03 Genetics”"). AnkiWeb has no API (and its terms forbid automated
+access) and no link to a single deck, so nothing more is possible there;
+linking decks and real card numbers need the free Anki app on a computer
+once (it syncs with AnkiWeb).
+
+**Connecting (desktop, Settings → Anki):** install AnkiConnect, keep Anki
 open, press Connect → Anki shows an "allow this website?" popup
 (`requestPermission`). After that:
 - **Set up subjects from Anki** – see "Linking" above.

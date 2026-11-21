@@ -8,6 +8,9 @@ import { createJSONStorage, persist } from "zustand/middleware";
 interface DeviceState {
   ankiConnected: boolean;
   setAnkiConnected(value: boolean): void;
+  /** This device studies Anki on AnkiWeb in the browser (no Anki app). */
+  ankiWeb: boolean;
+  setAnkiWeb(value: boolean): void;
 }
 
 export const useDevice = create<DeviceState>()(
@@ -15,6 +18,8 @@ export const useDevice = create<DeviceState>()(
     (set) => ({
       ankiConnected: false,
       setAnkiConnected: (ankiConnected) => set({ ankiConnected }),
+      ankiWeb: false,
+      setAnkiWeb: (ankiWeb) => set({ ankiWeb }),
     }),
     { name: "studymaster-device", storage: createJSONStorage(() => localStorage) },
   ),

@@ -115,3 +115,10 @@ describe("reading Anki", () => {
   });
 });
 
+describe("AnkiWeb", () => {
+  it("says which deck to open (AnkiWeb has no deck links)", async () => {
+    const { ankiWebHint } = await import("../src/lib/anki.js");
+    expect(ankiWebHint("Bio WS26::VL03 Genetics")).toBe("In AnkiWeb, open “Bio WS26” › “VL03 Genetics”.");
+  });
+});
+

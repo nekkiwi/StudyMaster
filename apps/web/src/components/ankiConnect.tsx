@@ -5,6 +5,7 @@ import { create } from "zustand";
 import {
   ANKIWEB_DECKS_URL,
   AnkiConnectError,
+  ankiWebHint,
   ankiDeckNames,
   collections,
   createAnkiDecks,
@@ -27,7 +28,7 @@ import { draftFromAnki, lectureNumber, type Draft } from "../lib/importer";
 import { useStore } from "../store";
 import { ImportDialog } from "./importer";
 import { toast } from "./toast";
-import { Badge, Button, cx, Modal, Select } from "./ui";
+import { Badge, Button, cx, Field, Modal, Segmented, Select } from "./ui";
 
 /** The last read from Anki on this computer (not saved; refreshed while the app is open). */
 export const useAnkiSync = create<{ busy: boolean; error: string | null; unlinked: Record<string, string[]>; hidden: boolean }>(() => ({
@@ -172,10 +173,19 @@ const useAnkiPrompt = create<{ deck: string | null; reason: PromptReason; show(d
  * computer → desktop Anki at that deck (asks to connect the first time),
  * iPhone → AnkiMobile studies it, Android → AnkiDroid shows its cards.
  */
+/** Opens AnkiWeb in a new tab and says which deck to open there. */
+export function openAnkiWeb(deck: string) {
+  window.open(ANKIWEB_DECKS_URL, "_blank", "noopener");
+  toast(ankiWebHint(deck));
+}
+
 export function useOpenAnki() {
   const connected = useDevice((s) => s.ankiConnected);
+  const ankiWeb = useDevice((s) => s.ankiWeb);
   const show = useAnkiPrompt((s) => s.show);
   return async (deck: string) => {
+    // AnkiWeb users: no app, no connection – open AnkiWeb (must happen right in the tap).
+    if (ankiWeb) return openAnkiWeb(deck);
     const platform = detectPlatform();
     if (platform !== "desktop") {
       window.location.href = phoneAnkiLink(platform, deck);
@@ -209,6 +219,7 @@ function SafariNote() {
 export function AnkiPromptDialog() {
   const { deck, reason, hide } = useAnkiPrompt();
   const setConnected = useDevice((s) => s.setAnkiConnected);
+  const setAnkiWeb = useDevice((s) => s.setAnkiWeb);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -253,11 +264,12 @@ export function AnkiPromptDialog() {
           <Button
             variant="ghost"
             onClick={() => {
-              window.open(ANKIWEB_DECKS_URL, "_blank", "noopener");
+              if (deck) openAnkiWeb(deck);
+              setAnkiWeb(true);
               close();
             }}
           >
-            <ExternalLink size={16} /> AnkiWeb instead
+            <ExternalLink size={16} /> I only use AnkiWeb
           </Button>
           {reason !== "safari" && (
             <Button onClick={go} disabled={busy}>
@@ -274,7 +286,10 @@ export function AnkiPromptDialog() {
         </p>
         {reason === "connect" ? (
           <>
-            <p>A website can only open a deck in Anki through the free AnkiConnect add-on. Set it up once on this computer:</p>
+            <p>
+              A website can only open a deck in the Anki app through the free AnkiConnect add-on. Set it up once on this computer – or, if you
+              study on AnkiWeb in the browser, choose <b>I only use AnkiWeb</b>.
+            </p>
             <ol className="list-decimal space-y-1.5 pl-5">
               <li>
                 In Anki: <i>Tools → Add-ons → Get Add-ons…</i>, enter <span className="font-mono">2055492159</span>, then restart Anki.
@@ -344,7 +359,16 @@ export function useAnkiDecks() {
 /** Explains how to connect, with a Connect button on computers. */
 function ConnectHint({ what }: { what: string }) {
   const platform = detectPlatform();
+  const ankiWeb = useDevice((s) => s.ankiWeb);
   const { connect, busy } = useConnectAnki();
+  if (ankiWeb) {
+    return (
+      <p className="text-sm text-slate-600 dark:text-slate-400">
+        To {what}, StudyMaster needs the free Anki app on a computer – AnkiWeb can't be connected to other websites. ▶ Anki still works: it opens
+        AnkiWeb and tells you which deck to open.
+      </p>
+    );
+  }
   if (platform !== "desktop") {
     return (
       <p className="text-sm text-slate-600 dark:text-slate-400">
@@ -635,6 +659,9 @@ export function AnkiConnectSection() {
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
 
+  const ankiWeb = useDevice((s) => s.ankiWeb);
+  const setAnkiWeb = useDevice((s) => s.setAnkiWeb);
+
   const createDecks = async () => {
     setCreating(true);
     try {
@@ -647,9 +674,40 @@ export function AnkiConnectSection() {
     }
   };
 
+  const modeChoice = (
+    <Field label="How do you study Anki on this device?" group>
+      <Segmented
+        value={ankiWeb ? "web" : "app"}
+        onChange={(v) => setAnkiWeb(v === "web")}
+        options={[
+          { value: "app", label: platform === "desktop" ? "Anki app" : platform === "android" ? "AnkiDroid app" : "AnkiMobile app" },
+          { value: "web", label: "AnkiWeb (browser)" },
+        ]}
+      />
+    </Field>
+  );
+
+  if (ankiWeb) {
+    return (
+      <div className="space-y-3">
+        {modeChoice}
+        <AnkiNumbers refresh={false} />
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          ▶ Anki opens AnkiWeb in a new tab and tells you which deck to open. AnkiWeb can't be connected to other websites (it has no interface
+          for that), so StudyMaster can't open a deck there directly or read your card numbers.
+        </p>
+        <p className="text-sm text-slate-600 dark:text-slate-400">
+          Want the full connection (open the exact deck, real card counts in your plan)? Install the free Anki app on a computer once and connect
+          it here. Your cards stay on AnkiWeb as before – the app just syncs with it.
+        </p>
+      </div>
+    );
+  }
+
   if (platform !== "desktop") {
     return (
       <div className="space-y-2 text-sm text-slate-600 dark:text-slate-400">
+        {modeChoice}
         <p>
           {platform === "ios" ? (
             <>
@@ -673,7 +731,8 @@ export function AnkiConnectSection() {
 
   if (isDesktopSafari()) {
     return (
-      <div className="text-sm text-slate-600 dark:text-slate-400">
+      <div className="space-y-3 text-sm text-slate-600 dark:text-slate-400">
+        {modeChoice}
         <SafariNote />
       </div>
     );
@@ -681,6 +740,7 @@ export function AnkiConnectSection() {
 
   return (
     <div className="space-y-4">
+      {modeChoice}
       {connected ? (
         <div className="flex items-center gap-2 text-sm">
           <CheckCircle2 size={18} className="text-emerald-600" />
@@ -718,9 +778,6 @@ export function AnkiConnectSection() {
           <>
             <Button onClick={connect} disabled={connecting}>
               {connecting ? <Loader2 size={16} className="animate-spin" /> : <Link2 size={16} />} Connect Anki
-            </Button>
-            <Button variant="ghost" onClick={() => window.open(ANKIWEB_DECKS_URL, "_blank", "noopener")}>
-              <ExternalLink size={16} /> Use AnkiWeb instead
             </Button>
           </>
         )}

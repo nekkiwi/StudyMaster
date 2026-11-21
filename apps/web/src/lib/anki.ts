@@ -141,6 +141,15 @@ export function isDesktopSafari(userAgent = typeof navigator !== "undefined" ? n
 export const ANKIWEB_DECKS_URL = "https://ankiweb.net/decks";
 
 /**
+ * AnkiWeb has no link that opens one deck (and no interface for other
+ * websites), so we open its deck list and say which deck to tap.
+ */
+export function ankiWebHint(deck: string): string {
+  const path = deck.split("::").map((p) => p.trim()).filter(Boolean);
+  return path.length ? `In AnkiWeb, open ${path.map((p) => `“${p}”`).join(" › ")}.` : "AnkiWeb is open in a new tab.";
+}
+
+/**
  * Subjects and lectures from Anki deck names: "Biology::Lecture 3" → subject
  * "Biology", lecture "Lecture 3". Top-level decks without children become
  * subjects without lectures. "Default" and filtered/custom study decks are skipped.
