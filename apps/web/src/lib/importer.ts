@@ -640,3 +640,8 @@ export function swapReader(subject: DraftSubject): DraftSubject {
   if (!subject.otherChunks) return subject;
   return { ...subject, chunks: subject.otherChunks, otherChunks: subject.chunks, readBy: subject.readBy === "ai" ? "quick" : "ai" };
 }
+
+/** An empty chapter the user adds in the review (e.g. a section the reader missed). */
+export function newDraftChunk(): DraftChunk {
+  return { id: draftId(), include: true, title: "", recordingMinutes: 0, pages: 0, slides: 0, sources: ["Added by you"], note: "add pages or slides" };
+}

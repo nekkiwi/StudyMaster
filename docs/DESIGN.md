@@ -129,7 +129,10 @@ line repeated in every chapter, page-number columns, OCR letter-spacing
 undone, glued labels like "LektionLektion…" → "Lektion N:"). Page counts are
 start-page differences; the last chapter ends at the highest number in its
 column. For signed-in users the AI reads the contents first (docs/AI.md);
-this quick reader is the fallback. Everything goes through the review list.
+this quick reader is the fallback. Everything goes through the review list,
+which hides unticked items (cover, preface, index …) behind "Show N
+unticked items" (unticking hides with Undo), and has **Add section here**
+between items for sections the reader missed.
 
 ### Linking subjects and lectures to Anki decks
 - A subject can be **linked to an Anki deck** (`Subject.ankiDeck`, a

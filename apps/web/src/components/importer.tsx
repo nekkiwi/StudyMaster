@@ -1,11 +1,11 @@
-import { ArrowUpToLine, FileText, FolderOpen, Layers, Link2, ListTree, Loader2, Sparkles, Upload } from "lucide-react";
+import { ArrowUpToLine, Eye, EyeOff, FileText, FolderOpen, Layers, Link2, ListTree, Loader2, Plus, Sparkles, Upload } from "lucide-react";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { filesFromDrop, filesFromInput, readFiles, type PickedFile } from "../lib/fileReaders";
 import { todayISO } from "../lib/format";
 import { leaf } from "../lib/anki";
 import { useAccount } from "../account";
 import { readTocWithAi } from "../lib/aiImport";
-import { adoptEmptySubject, ankiTarget, applyAiToc, buildDraft, swapReader, draftFromToc, mergeChunks, type Draft, type DraftChunk, type DraftSubject } from "../lib/importer";
+import { adoptEmptySubject, ankiTarget, applyAiToc, buildDraft, newDraftChunk, swapReader, draftFromToc, mergeChunks, type Draft, type DraftChunk, type DraftSubject } from "../lib/importer";
 import { useStore } from "../store";
 import { AnkiCollectionPicker } from "./ankiConnect";
 import { toast } from "./toast";
@@ -357,16 +357,41 @@ function Review({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => voi
         s.id === sid ? { ...s, chunks: s.chunks.map((c) => (c.id === cid ? { ...c, ...patch } : c)) } : s,
       ),
     });
-  const mergeUp = (sid: string, index: number) =>
+  /** Merges a chunk into the one shown above it (hidden unticked ones are skipped). */
+  const mergeInto = (sid: string, aboveId: string, id: string) =>
     onChange({
       ...draft,
       subjects: draft.subjects.map((s) => {
-        if (s.id !== sid || index < 1) return s;
+        if (s.id !== sid) return s;
+        const above = s.chunks.find((c) => c.id === aboveId);
+        const chunk = s.chunks.find((c) => c.id === id);
+        if (!above || !chunk) return s;
+        return { ...s, chunks: s.chunks.filter((c) => c.id !== id).map((c) => (c.id === aboveId ? { ...mergeChunks(above, chunk), id: aboveId } : c)) };
+      }),
+    });
+  // Unticked items are hidden unless the user asks to see them.
+  const [showUnticked, setShowUnticked] = useState<Record<string, boolean>>({});
+  const [justAdded, setJustAdded] = useState<string | null>(null);
+  /** Adds an empty section right after the given chunk. */
+  const addAfter = (sid: string, afterId: string) => {
+    const fresh = newDraftChunk();
+    setJustAdded(fresh.id);
+    onChange({
+      ...draft,
+      subjects: draft.subjects.map((s) => {
+        if (s.id !== sid) return s;
         const chunks = s.chunks.slice();
-        chunks.splice(index - 1, 2, mergeChunks(chunks[index - 1]!, chunks[index]!));
+        chunks.splice(chunks.findIndex((c) => c.id === afterId) + 1, 0, fresh);
         return { ...s, chunks };
       }),
     });
+  };
+  const untick = (sid: string, chunk: DraftChunk) => {
+    setChunk(sid, chunk.id, { include: false });
+    if (!showUnticked[sid]) {
+      toast(`Hidden “${chunk.title || "Untitled"}”.`, { action: { label: "Undo", run: () => setChunk(sid, chunk.id, { include: true }) } });
+    }
+  };
   const moveTo = (sid: string, cid: string, target: string) => {
     const chunk = draft.subjects.find((s) => s.id === sid)?.chunks.find((c) => c.id === cid);
     if (!chunk || target === sid) return;
@@ -472,18 +497,28 @@ function Review({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => voi
                 </ul>
               </div>
             )}
-            <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-              {subject.chunks.map((chunk, i) => (
-                <li key={chunk.id} className={cx("space-y-2 p-3", !chunk.include && "opacity-50")}>
+            <ul>
+              {(() => {
+                const shown = subject.chunks.filter((c) => c.include || showUnticked[subject.id]);
+                return shown.map((chunk, i) => (
+                <li key={chunk.id}>
+                <div className={cx("space-y-2 border-t border-slate-100 p-3 first:border-t-0 dark:border-slate-800", !chunk.include && "opacity-50", i === 0 && "border-t-0")}>
                   <div className="flex items-center gap-2">
                     <input
                       type="checkbox"
                       aria-label={`Import ${chunk.title}`}
                       checked={chunk.include}
-                      onChange={(e) => setChunk(subject.id, chunk.id, { include: e.target.checked })}
+                      onChange={(e) => (e.target.checked ? setChunk(subject.id, chunk.id, { include: true }) : untick(subject.id, chunk))}
                       className="h-4 w-4 shrink-0 accent-indigo-600"
                     />
-                    <TextInput className="min-w-0 flex-1" aria-label="Title" value={chunk.title} onChange={(e) => setChunk(subject.id, chunk.id, { title: e.target.value })} />
+                    <TextInput
+                      className="min-w-0 flex-1"
+                      aria-label="Title"
+                      placeholder="Section title"
+                      autoFocus={chunk.id === justAdded}
+                      value={chunk.title}
+                      onChange={(e) => setChunk(subject.id, chunk.id, { title: e.target.value })}
+                    />
                   </div>
                   <div className="grid grid-cols-3 gap-2 pl-6">
                     {(
@@ -495,7 +530,7 @@ function Review({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => voi
                     ).map(([label, key]) => (
                       <label key={key} className="block">
                         <span className="mb-0.5 block text-[11px] text-slate-500">{label}</span>
-                        <NumberInput aria-label={label} min={0} value={chunk[key]} onChange={(v) => setChunk(subject.id, chunk.id, { [key]: Math.max(0, Math.round(v)) })} />
+                        <NumberInput aria-label={label} min={0} value={chunk[key]} onChange={(v) => setChunk(subject.id, chunk.id, { [key]: Math.max(0, Math.round(v)), note: undefined })} />
                       </label>
                     ))}
                   </div>
@@ -506,7 +541,7 @@ function Review({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => voi
                       {i > 0 && (
                         <button
                           type="button"
-                          onClick={() => mergeUp(subject.id, i)}
+                          onClick={() => mergeInto(subject.id, shown[i - 1]!.id, chunk.id)}
                           className="inline-flex items-center gap-1 whitespace-nowrap rounded-lg px-2 py-1 font-medium text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800"
                         >
                           <ArrowUpToLine size={13} /> Merge with above
@@ -522,9 +557,36 @@ function Review({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => voi
                       )}
                     </span>
                   </div>
+                </div>
+                <div className="flex items-center gap-2 px-3 opacity-70 transition hover:opacity-100">
+                  <span className="h-px flex-1 bg-slate-100 dark:bg-slate-800" />
+                  <button
+                    type="button"
+                    onClick={() => addAfter(subject.id, chunk.id)}
+                    className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 dark:hover:bg-indigo-500/10"
+                  >
+                    <Plus size={12} /> Add section here
+                  </button>
+                  <span className="h-px flex-1 bg-slate-100 dark:bg-slate-800" />
+                </div>
                 </li>
-              ))}
+                ));
+              })()}
             </ul>
+            {subject.chunks.some((c) => !c.include) && (
+              <div className="border-t border-slate-100 px-3 py-2 dark:border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setShowUnticked({ ...showUnticked, [subject.id]: !showUnticked[subject.id] })}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-indigo-600"
+                >
+                  {showUnticked[subject.id] ? <EyeOff size={13} /> : <Eye size={13} />}
+                  {showUnticked[subject.id]
+                    ? "Hide unticked items"
+                    : `Show ${subject.chunks.filter((c) => !c.include).length} unticked item${subject.chunks.filter((c) => !c.include).length === 1 ? "" : "s"} (cover, preface, index …)`}
+                </button>
+              </div>
+            )}
           </section>
         );
       })}
