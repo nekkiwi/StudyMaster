@@ -76,6 +76,11 @@ apps/web/        React 19 + Vite 6 + Tailwind 4 PWA (zustand for state)
   src/components/ankiConnect.tsx  ▶ Anki button logic, Settings "Anki app",
                       "From Anki" import picker, subject editor deck links
   src/components/account.tsx  Sign-in form (landing page + dialog), account chip/section
+apps/api/        Cloudflare Worker code (same Worker as the site, only /api/*)
+  src/index.ts        Router – only a default export allowed (see HOSTING.md)
+  src/firebase.ts     Firebase ID token check (no library)
+  src/toc.ts          POST /api/toc: table of contents → chapters with Claude
+                      Haiku 5.5 (structured output). Secret ANTHROPIC_API_KEY.
 ```
 
 ## How the planner works (short)

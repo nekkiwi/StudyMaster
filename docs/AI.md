@@ -50,6 +50,20 @@
   custom connector → log in. Later: submit to Claude's connector directory
   for one-click setup.
 
+### Built: "Let AI read the contents" (import)
+When a table of contents is messy (scanned books), the import review offers
+**Let AI read the contents**. Only the text of the contents pages is sent –
+never the book – and only when the user presses the button.
+- `apps/web/src/lib/aiImport.ts` → `POST /api/toc` with the user's Firebase
+  ID token → `apps/api` (the same Cloudflare Worker that serves the app)
+  verifies the token (Google's public keys), limits 20 reads per user and
+  hour, and calls **Claude Haiku 5.5** with a structured-output schema
+  (`chapters[{title, startPage, include}], lastPage`), effort `low`.
+- Cost: about $0.001 per import (≈ 3k tokens in, 1k out). Set a monthly spend
+  limit in the Anthropic Console as the hard cap.
+- The key is the Worker secret `ANTHROPIC_API_KEY` (Cloudflare dashboard →
+  Workers → app → Settings → Variables and Secrets); never in the repo or app.
+
 ### 3. Copy-paste prompts
 - **Import with AI:** the app shows a ready prompt; the user pastes it into any
   chatbot together with a syllabus or a photo of a table of contents, then

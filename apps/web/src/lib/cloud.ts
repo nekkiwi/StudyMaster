@@ -103,6 +103,12 @@ export async function sendReset(email: string): Promise<void> {
   await authMod.sendPasswordResetEmail(auth, email.trim());
 }
 
+/** A fresh Firebase ID token for our own API, or null when signed out. */
+export async function idToken(): Promise<string | null> {
+  const { auth } = await loadCloud();
+  return auth.currentUser ? auth.currentUser.getIdToken() : null;
+}
+
 export async function signOutCloud(): Promise<void> {
   const { auth, authMod } = await loadCloud();
   await authMod.signOut(auth);

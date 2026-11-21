@@ -72,6 +72,10 @@ export interface DraftSubject {
   links?: DraftLink[];
   /** All sub-decks of the linked collection (to rebuild links when the target changes). */
   ankiSubdecks?: string[];
+  /** Text of the table of contents these chapters came from (for "Let AI read the contents"). */
+  tocText?: string;
+  /** Last page of the book, if the user entered it (pasted contents). */
+  lastPage?: number;
 }
 
 export interface Draft {
@@ -376,6 +380,7 @@ function fileName(path: string): string {
 export function buildDraft(files: DetectedFile[], existing: Subject[], today: ISODate): Draft {
   const skipped: Draft["skipped"] = [];
   const bySubject = new Map<string, DraftChunk[]>();
+  const tocBySubject = new Map<string, string>();
   const add = (subject: string, chunk: DraftChunk) => {
     let list = bySubject.get(subject);
     if (!list) bySubject.set(subject, (list = []));
@@ -414,6 +419,10 @@ export function buildDraft(files: DetectedFile[], existing: Subject[], today: IS
       continue;
     }
     // No bookmarks: read the printed table of contents.
+    if (file.tocPages?.length) {
+      const prev = tocBySubject.get(subject);
+      tocBySubject.set(subject, (prev ? `${prev}\n\n` : "") + file.tocPages.join("\n"));
+    }
     const fromToc = file.kind === "pdf" && pages >= 30 ? (file.tocPages ?? []).map((t) => parseToc(t)).filter((c) => c.length >= 3).flat() : [];
     if (fromToc.length >= 3) {
       fromToc.forEach((ch) =>
@@ -463,6 +472,7 @@ export function buildDraft(files: DetectedFile[], existing: Subject[], today: IS
       existingId: match?.id,
       examDate: addDays(today, 42),
       chunks: paired,
+      ...(tocBySubject.has(name) ? { tocText: tocBySubject.get(name) } : {}),
     });
   }
   subjects.sort((a, b) => a.name.localeCompare(b.name));
@@ -473,8 +483,9 @@ export function buildDraft(files: DetectedFile[], existing: Subject[], today: IS
 export function draftFromToc(text: string, subjectName: string, existing: Subject[], today: ISODate, lastPage?: number): Draft {
   const chapters = parseToc(text, lastPage);
   const match = matchSubject(subjectName, existing);
+  // Even when nothing was found, the review can still let AI read the text.
   return {
-    subjects: chapters.length
+    subjects: text.trim()
       ? [
           {
             id: draftId(),
@@ -482,6 +493,8 @@ export function draftFromToc(text: string, subjectName: string, existing: Subjec
             name: match?.name ?? (subjectName.trim() || "New subject"),
             existingId: match?.id,
             examDate: addDays(today, 42),
+            tocText: text,
+            ...(lastPage ? { lastPage } : {}),
             chunks: chapters.map((c) => ({
               id: draftId(),
               include: c.include,
@@ -563,5 +576,55 @@ export function ankiTarget(d: DraftSubject, target: Subject | undefined, existin
         note: "add pages or slides",
         ankiDeck: deck,
       })),
+  };
+}
+
+/** What the AI returns for a table of contents (see apps/api/src/toc.ts). */
+export interface AiToc {
+  chapters: { title: string; startPage: number | null; include: boolean }[];
+  lastPage: number | null;
+}
+
+/**
+ * Chapters with page counts from the AI's start pages: up to the next
+ * chapter that starts later; the last one up to the last page.
+ */
+export function chaptersFromAi(toc: AiToc, lastPage?: number): TocChapter[] {
+  const end = lastPage ?? toc.lastPage ?? undefined;
+  const raw = toc.chapters.map((c, i) => {
+    const start = c.startPage === null ? undefined : Math.round(c.startPage);
+    if (start === undefined) return undefined;
+    // Page numbers that restart (e.g. a word list numbered from 1) can't be measured.
+    if (toc.chapters.slice(0, i).some((p) => p.startPage !== null && Math.round(p.startPage) > start)) return undefined;
+    const next = toc.chapters.slice(i + 1).find((n) => n.startPage !== null && Math.round(n.startPage) > start);
+    if (next) return Math.round(next.startPage!) - start;
+    return end !== undefined && end >= start ? end - start + 1 : undefined;
+  });
+  const known = raw.filter((p, i): p is number => p !== undefined && p > 0 && toc.chapters[i]!.include).sort((a, b) => a - b);
+  const median = known.length ? known[Math.floor(known.length / 2)]! : 20;
+  return toc.chapters
+    .map((c, i) => ({
+      title: c.title.trim(),
+      pages: raw[i] && raw[i]! > 0 ? raw[i]! : median,
+      include: c.include,
+      estimated: !(raw[i] && raw[i]! > 0),
+    }))
+    .filter((c) => c.title);
+}
+
+/** Replaces a draft subject's chapters with the ones the AI read. */
+export function applyAiToc(subject: DraftSubject, toc: AiToc, source: string): DraftSubject {
+  return {
+    ...subject,
+    chunks: chaptersFromAi(toc, subject.lastPage).map((c) => ({
+      id: draftId(),
+      include: c.include,
+      title: c.title,
+      recordingMinutes: 0,
+      pages: c.pages,
+      slides: 0,
+      sources: [`${source} (read by AI)`],
+      ...(c.estimated ? { note: "pages estimated – please check" } : {}),
+    })),
   };
 }

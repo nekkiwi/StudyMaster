@@ -1,14 +1,21 @@
-// Cloudflare Worker that serves the StudyMaster web app (static files).
-// Cloudflare Workers Builds runs `npm run build` and then `npx wrangler deploy`
-// on every push. Later the backend (API, MCP, cron) can live in this Worker too.
+// Cloudflare Worker that serves the StudyMaster web app (static files) and a
+// small API under /api (apps/api). Cloudflare Workers Builds runs
+// `npm run build` and then `npx wrangler deploy` on every push.
+// Secrets (set in the Cloudflare dashboard, never in this file):
+//   ANTHROPIC_API_KEY – for "Let AI read the contents" in the import.
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   // Must match the Worker's name in the Cloudflare dashboard.
   "name": "app",
   "compatibility_date": "2026-10-01",
+  "main": "apps/api/src/index.ts",
   "assets": {
     "directory": "./apps/web/dist",
+    "binding": "ASSETS",
     // The app uses hash routes; unknown paths fall back to index.html.
-    "not_found_handling": "single-page-application"
-  }
+    "not_found_handling": "single-page-application",
+    // Only the API runs Worker code; everything else is served as static files.
+    "run_worker_first": ["/api/*"]
+  },
+  "observability": { "enabled": true }
 }

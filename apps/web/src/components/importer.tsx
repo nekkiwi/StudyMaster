@@ -1,9 +1,11 @@
-import { ArrowUpToLine, FileText, FolderOpen, Layers, Link2, ListTree, Loader2, Upload } from "lucide-react";
+import { ArrowUpToLine, FileText, FolderOpen, Layers, Link2, ListTree, Loader2, Sparkles, Upload } from "lucide-react";
 import { useEffect, useRef, useState, type DragEvent } from "react";
 import { filesFromDrop, filesFromInput, readFiles, type PickedFile } from "../lib/fileReaders";
 import { todayISO } from "../lib/format";
 import { leaf } from "../lib/anki";
-import { adoptEmptySubject, ankiTarget, buildDraft, draftFromToc, mergeChunks, type Draft, type DraftChunk, type DraftSubject } from "../lib/importer";
+import { useAccount } from "../account";
+import { readTocWithAi } from "../lib/aiImport";
+import { adoptEmptySubject, ankiTarget, applyAiToc, buildDraft, draftFromToc, mergeChunks, type Draft, type DraftChunk, type DraftSubject } from "../lib/importer";
 import { useStore } from "../store";
 import { AnkiCollectionPicker } from "./ankiConnect";
 import { toast } from "./toast";
@@ -245,13 +247,48 @@ function Choose({
                 subjects,
                 useStore.getState().chunks,
               );
-              if (draft.subjects.length === 0) toast("No chapters found. Each line needs a page number at the end.");
-              else onToc(draft);
+              onToc(draft);
             }}
           >
             <ListTree size={16} /> Find chapters
           </Button>
         </div>
+      )}
+    </div>
+  );
+}
+
+/** "Let AI read the contents" for chapters that came from a table of contents. */
+function AiRead({ subject, onChange }: { subject: DraftSubject; onChange: (next: DraftSubject) => void }) {
+  const signedIn = useAccount((s) => s.status === "signedIn");
+  const [busy, setBusy] = useState(false);
+  const empty = subject.chunks.length === 0;
+  const run = async () => {
+    setBusy(true);
+    try {
+      const toc = await readTocWithAi(subject.tocText!);
+      const next = applyAiToc(subject, toc, subject.chunks[0]?.sources[0]?.replace(/ \(.*\)$/, "") ?? "Table of contents");
+      if (next.chunks.length === 0) toast("The AI found no chapters in this text either.");
+      else {
+        onChange(next);
+        toast(`The AI found ${next.chunks.filter((c) => c.include).length} chapters. Check them below.`, { tone: "success" });
+      }
+    } catch (e) {
+      toast(e instanceof Error ? e.message : "The AI couldn't answer right now.");
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-2 border-b border-slate-100 bg-violet-50/50 p-3 text-sm dark:border-slate-800 dark:bg-violet-500/5">
+      <span className="min-w-0 flex-1 text-slate-600 dark:text-slate-400">
+        {empty ? "No chapters found in this table of contents." : "Chapters read from the table of contents."}{" "}
+        {signedIn ? "Not right? Let AI read it – only the contents text is sent." : "Not right? Sign in to let AI read it."}
+      </span>
+      {signedIn && (
+        <Button size="sm" variant="secondary" onClick={run} disabled={busy}>
+          {busy ? <Loader2 size={14} className="animate-spin" /> : <Sparkles size={14} />} {busy ? "Reading…" : "Let AI read the contents"}
+        </Button>
       )}
     </div>
   );
@@ -297,7 +334,7 @@ function Review({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => voi
     });
   };
 
-  if (draft.subjects.length === 0 || (total === 0 && !draft.subjects.some((s) => s.ankiDeck))) {
+  if (draft.subjects.length === 0 || (total === 0 && !draft.subjects.some((s) => s.ankiDeck || s.tocText))) {
     return <p className="py-8 text-center text-slate-500">Nothing to import was found.</p>;
   }
 
@@ -360,6 +397,7 @@ function Review({ draft, onChange }: { draft: Draft; onChange: (d: Draft) => voi
                 </span>
               )}
             </header>
+            {subject.tocText && <AiRead subject={subject} onChange={(next) => setSubject(subject.id, next)} />}
             {(subject.links?.length ?? 0) > 0 && (
               <div className="border-b border-slate-100 p-3 dark:border-slate-800">
                 <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-slate-600 dark:text-slate-300">

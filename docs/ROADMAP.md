@@ -64,7 +64,11 @@
 - `/mcp` with OAuth, same tools.
 
 ### 5. Import with AI
-- Copy-paste prompt → JSON → import screen with preview.
+- ✅ "Let AI read the contents" in the import review: the Worker (`apps/api`,
+  `POST /api/toc`) sends the table-of-contents text to Claude Haiku 5.5
+  (structured output), signed-in users only, 20 reads/user/hour.
+  Needs the Worker secret `ANTHROPIC_API_KEY`.
+- Later: photos of a contents page / syllabus, copy-paste prompt for any chatbot.
 
 ### 6. Google Play
 - PWABuilder → Trusted Web Activity, `assetlinks.json`, closed test, release.

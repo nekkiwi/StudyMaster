@@ -147,6 +147,17 @@ upload key in the `Authorization` header, which the cloud session's network
 proxy replaces with the saved API token, so the upload fails
 (`Authorization failed [code: 8000013]`). Git builds avoid this.
 
+### The API (`apps/api`)
+The same Worker runs a small API: `wrangler.jsonc` → `main:
+apps/api/src/index.ts`, `assets.run_worker_first: ["/api/*"]` (everything
+else stays plain static files). Secrets are set once in the Cloudflare
+dashboard (Workers → app → Settings → Variables and Secrets → Add → Secret)
+and survive deploys:
+- `ANTHROPIC_API_KEY` – "Let AI read the contents". Without it the endpoint
+  answers "not set up yet".
+Never export anything but the default handler from `apps/api/src/index.ts`
+(Cloudflare treats named exports of the main module as entry points).
+
 ### Manual deploy (fallback, from your own computer)
 ```bash
 npx wrangler@4 login

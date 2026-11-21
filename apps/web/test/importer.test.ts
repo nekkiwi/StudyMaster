@@ -317,3 +317,32 @@ describe("scanned tables of contents", () => {
   });
 });
 
+describe("chapters read by AI", () => {
+  it("turns start pages into page counts, skipping back matter with its own numbering", async () => {
+    const { chaptersFromAi } = await import("../src/lib/importer.js");
+    const chapters = chaptersFromAi({
+      chapters: [
+        { title: "Lektion 1: Ankommen", startPage: 10, include: true },
+        { title: "Lektion 2: Zu Hause", startPage: 23, include: true },
+        { title: "Lektion 3: Essen", startPage: null, include: true },
+        { title: "Lektion 4: Arbeit", startPage: 47, include: true },
+        { title: "Lernwortschatz", startPage: 1, include: false },
+      ],
+      lastPage: 58,
+    });
+    expect(chapters.map((c) => [c.title, c.pages, c.estimated])).toEqual([
+      ["Lektion 1: Ankommen", 13, false],
+      ["Lektion 2: Zu Hause", 24, false],
+      ["Lektion 3: Essen", 13, true],
+      ["Lektion 4: Arbeit", 12, false],
+      ["Lernwortschatz", 13, true],
+    ]);
+  });
+
+  it("keeps the pasted text so the review can offer AI even when nothing was found", async () => {
+    const { draftFromToc } = await import("../src/lib/importer.js");
+    const draft = draftFromToc("some messy text without pages", "Deutsch", [], TODAY);
+    expect(draft.subjects[0]).toMatchObject({ name: "Deutsch", chunks: [], tocText: "some messy text without pages" });
+  });
+});
+
