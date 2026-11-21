@@ -78,7 +78,8 @@ export const Action = z.union([
 export type Action = z.infer<typeof Action>;
 
 export const AssistantResult = z.object({
-  reply: z.string().describe("Short, friendly answer in the user's language (1–3 sentences)."),
+  language: z.string().describe("Language of the latest message only (ignore earlier turns), e.g. English, German."),
+  reply: z.string().describe("Short, friendly answer in that language (1–3 sentences)."),
   actions: z.array(Action).describe("Proposed changes; empty for questions or when unsure."),
 });
 export type AssistantResult = z.infer<typeof AssistantResult>;

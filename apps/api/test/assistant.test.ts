@@ -28,6 +28,7 @@ describe("assistant request", () => {
 
   it("parses a typical answer", () => {
     const parsed = AssistantResult.parse({
+      language: "English",
       reply: "Get well soon! I'll keep today to Thursday free.",
       actions: [{ type: "block_days", start: "2026-11-21", end: "2026-11-26", reason: "sick", note: null }],
     });
