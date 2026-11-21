@@ -59,8 +59,12 @@ never the book – and only when the user presses the button.
   verifies the token (Google's public keys), limits 20 reads per user and
   hour, and calls **Claude Haiku 5.5** with a structured-output schema
   (`chapters[{title, startPage, include}], lastPage`), effort `low`.
-- Cost: about $0.001 per import (≈ 3k tokens in, 1k out). Set a monthly spend
-  limit in the Anthropic Console as the hard cap.
+- **Same answer every time:** the prompt asks for exact printed numbers
+  (never estimates); the Worker reads the text **3 times in parallel and takes
+  the majority** per field (`consensus` in `apps/api/src/toc.ts`); the app
+  remembers answers per device by a hash of the text (`aiImport.ts`).
+- Cost: about $0.003 per import (3 × ≈3k tokens in, 1k out). Set a monthly
+  spend limit in the Anthropic Console as the hard cap.
 - The key is the Worker secret `ANTHROPIC_API_KEY` (Cloudflare dashboard →
   Workers → app → Settings → Variables and Secrets); never in the repo or app.
 

@@ -4,7 +4,9 @@ import { useMemo, useState } from "react";
 import { ProposalBanner } from "../components/proposal";
 import { KIND_ICON, SessionCard } from "../components/session";
 import { Badge, Button, Card, cx, Modal, SectionTitle, SubjectDot } from "../components/ui";
+import { dayBackground } from "../lib/colors";
 import { formatDay, formatMinutes, formatShort, SLOT_LABEL, weekdayShort } from "../lib/format";
+import { daySubjects } from "../lib/stats";
 import type { Planner } from "../planner";
 import { useStore } from "../store";
 
@@ -49,7 +51,7 @@ export function PlanView({ planner }: { planner: Planner }) {
         ))}
       </div>
 
-      <Legend />
+      <Legend subjects={state.subjects} />
 
       <Modal open={!!openDay} onClose={() => setOpenDay(null)} title={openDay ? formatDay(openDay) : ""}>
         {openDay && (
@@ -90,11 +92,15 @@ function DayColumn({
   const isToday = date === today;
   const past = date < planner.from;
   const total = sessions.reduce((a, s) => a + sessionMinutes(s), 0);
+  // The day takes the colors of the subjects studied: one tint, or diagonal splits.
+  const colors = daySubjects(shown.plan, date).map((id) => subjects.get(id)?.color).filter((c): c is string => !!c);
+  const background = block ? undefined : dayBackground(colors, 22);
 
   return (
     <button
       type="button"
       onClick={onOpen}
+      style={background ? { backgroundImage: background } : undefined}
       className={cx(
         "flex flex-col rounded-2xl border p-3 text-left transition hover:shadow-md md:min-h-64",
         isToday
@@ -135,7 +141,7 @@ function DayColumn({
               "rounded-lg border px-2 py-1.5",
               s.kind === "buffer" && "buffer-stripes border-amber-300/70",
               s.kind === "extra" && "border-rose-200 dark:border-rose-500/30",
-              s.kind === "normal" && "border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-800/40",
+              s.kind === "normal" && "border-slate-200/70 bg-white/75 dark:border-slate-700/60 dark:bg-slate-900/60",
             )}
           >
             <p className="text-[10px] font-medium tracking-wide text-slate-400 uppercase">
@@ -192,6 +198,7 @@ function Overview({ planner, onPickWeek, weekStart }: { planner: Planner; onPick
   const exams = new Map(state.subjects.map((s) => [s.examDate, s]));
 
   const upcoming = state.subjects.filter((s) => s.examDate >= today).sort((a, b) => a.examDate.localeCompare(b.examDate));
+  const subjects = new Map(state.subjects.map((s) => [s.id, s]));
   const status = new Map(shown.plan.subjects.map((s) => [s.subjectId, s]));
 
   return (
@@ -210,21 +217,22 @@ function Overview({ planner, onPickWeek, weekStart }: { planner: Planner; onPick
             const blocked = state.blocked.some((b) => b.start <= d && b.end >= d);
             const inWeek = d >= weekStart && d <= addDays(weekStart, 6);
             const level = minutes === 0 ? 0 : Math.min(4, Math.ceil((minutes / max) * 4));
+            // Subject colors of the day; busier days a little stronger.
+            const colors = daySubjects(shown.plan, d).map((id) => subjects.get(id)?.color).filter((c): c is string => !!c);
+            const background = !exam && !blocked && minutes > 0 ? dayBackground(colors, 30 + level * 12) : undefined;
             return (
               <button
                 key={d}
                 type="button"
                 onClick={() => onPickWeek(d)}
-                title={`${formatDay(d)}${minutes ? ` · ${formatMinutes(minutes)}` : ""}${exam ? ` · ${exam.name} exam` : ""}`}
+                title={`${formatDay(d)}${minutes ? ` · ${formatMinutes(minutes)}` : ""}${colors.length ? ` · ${daySubjects(shown.plan, d).map((id) => subjects.get(id)?.name).join(" + ")}` : ""}${exam ? ` · ${exam.name} exam` : ""}`}
                 className={cx(
                   "relative aspect-square rounded-md transition hover:scale-110",
                   d < today && "opacity-40",
                   inWeek && "outline-2 outline-offset-1 outline-indigo-500",
-                  blocked
-                    ? "bg-slate-200 dark:bg-slate-700"
-                    : ["bg-slate-100 dark:bg-slate-800", "bg-indigo-200 dark:bg-indigo-900", "bg-indigo-300 dark:bg-indigo-700", "bg-indigo-500", "bg-indigo-700 dark:bg-indigo-400"][level],
+                  blocked ? "bg-slate-200 dark:bg-slate-700" : "bg-slate-100 dark:bg-slate-800",
                 )}
-                style={exam ? { background: exam.color } : undefined}
+                style={exam ? { background: exam.color } : background ? { backgroundImage: background } : undefined}
               >
                 {exam && (
                   <span className="absolute inset-0 flex items-center justify-center text-white">
@@ -261,10 +269,21 @@ function Overview({ planner, onPickWeek, weekStart }: { planner: Planner; onPick
   );
 }
 
-function Legend() {
+function Legend({ subjects }: { subjects: Subject[] }) {
+  const [a, b] = subjects;
+  const split = a && b ? dayBackground([a.color ?? "#6366f1", b.color ?? "#10b981"], 45) : undefined;
   return (
     <div className="flex flex-wrap gap-x-4 gap-y-2 text-xs text-slate-500 dark:text-slate-400">
-      <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-slate-100 ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700" /> Session</span>
+      {subjects.map((s) => (
+        <span key={s.id} className="flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded" style={{ backgroundImage: dayBackground([s.color ?? "#6366f1"], 45) }} /> {s.name}
+        </span>
+      ))}
+      {split && (
+        <span className="flex items-center gap-1.5">
+          <span className="h-3 w-3 rounded" style={{ backgroundImage: split }} /> Two subjects that day
+        </span>
+      )}
       <span className="flex items-center gap-1.5"><span className="buffer-stripes h-3 w-3 rounded ring-1 ring-amber-300" /> Weekly buffer (catch-up)</span>
       <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded ring-1 ring-rose-300" /> Extra session</span>
       <span className="flex items-center gap-1.5"><span className="h-3 w-3 rounded bg-slate-200 dark:bg-slate-700" /> Day off</span>

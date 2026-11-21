@@ -4,13 +4,13 @@
  * everything else is served straight from the assets.
  *
  * POST /api/toc  { text }  →  { chapters, lastPage }
- *   Reads a messy table of contents with Claude. Signed-in users only
+ *   Reads a messy table of contents with Claude (3 reads, majority wins). Signed-in users only
  *   (Firebase ID token), limited per user. The key is a Worker secret.
  */
 import Anthropic from "@anthropic-ai/sdk";
 import { AuthError, verifyFirebaseToken } from "./firebase";
 import { allow } from "./rateLimit";
-import { MAX_TEXT, readToc, TocError } from "./toc";
+import { MAX_TEXT, readTocStable, TocError } from "./toc";
 
 // Only the default export may be exported from this file: Cloudflare treats
 // every named export of the main module as an entry point.
@@ -50,7 +50,7 @@ async function handleToc(request: Request, env: Env): Promise<Response> {
 
   const client = new Anthropic({ apiKey: env.ANTHROPIC_API_KEY, maxRetries: 1 });
   try {
-    return reply(await readToc(client, text));
+    return reply(await readTocStable(client, text));
   } catch (e) {
     if (e instanceof TocError) return reply({ error: e.message }, e.status);
     if (e instanceof Anthropic.RateLimitError) return reply({ error: "The AI is busy – please try again in a minute." }, 429);

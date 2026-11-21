@@ -5,6 +5,7 @@ import {
   remainingMinutes,
   totalMinutes,
   type ISODate,
+  type Plan,
   type StudyState,
   type Subject,
 } from "@studymaster/core";
@@ -48,3 +49,20 @@ export function recentCheckIns(checkIns: Record<ISODate, CheckInRecord>, today: 
   const recent = Object.entries(checkIns).filter(([d]) => d >= start && d <= today);
   return { yes: recent.filter(([, r]) => r.answer === "yes").length, total: recent.length };
 }
+
+/**
+ * Subjects worked on that day (lecture work and exam reviews), most minutes
+ * first. Anki-only days count the subjects whose cards are reviewed.
+ */
+export function daySubjects(plan: Plan, date: ISODate): string[] {
+  const minutes = new Map<string, number>();
+  const add = (id: string | undefined, m: number) => id && minutes.set(id, (minutes.get(id) ?? 0) + m);
+  const sessions = plan.sessions.filter((x) => x.date === date);
+  for (const s of sessions) {
+    for (const i of s.items) if (i.kind !== "anki") add(i.subjectId, i.minutes);
+    if (s.type === "review") add(s.reviewSubjectId, s.reviewMinutes ?? 30);
+  }
+  if (minutes.size === 0) for (const s of sessions) for (const i of s.items) for (const d of i.decks ?? []) add(d, 1);
+  return [...minutes.entries()].sort((a, b) => b[1] - a[1]).map(([id]) => id);
+}
+

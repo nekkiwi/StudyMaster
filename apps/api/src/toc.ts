@@ -28,9 +28,9 @@ The text was extracted from PDF pages and is often messy: OCR letter-spacing ("E
 Rules:
 - List the top-level units a student works through one by one (chapters, lessons, units, Lektionen, Kapitel) in book order – not their sub-sections.
 - Repair OCR spacing and obvious OCR errors in titles; keep the book's language. If units carry a label or number ("Lektion 3", "Chapter 3", "3"), start the title with it, e.g. "Lektion 3: Essen und Trinken".
-- startPage: the printed start page of the unit, or null if it can't be told.
+- startPage: the printed start page of the unit – the smallest page number listed for that unit, copied exactly as printed (without prefixes such as "AB" or "S."), or null if it can't be told. Never estimate.
 - include: false for front and back matter (preface, contents, index, glossary, word lists, answer keys, appendix), true for study units.
-- lastPage: the last printed page of the final study unit if it can be inferred, else null.
+- lastPage: the largest page number listed for any part of the final study unit, copied exactly as printed, or null if none is listed. Never estimate.
 - If the text is not a table of contents, return an empty chapters list.`;
 
 export class TocError extends Error {
@@ -40,6 +40,45 @@ export class TocError extends Error {
   ) {
     super(message);
   }
+}
+
+/** How many reads are compared; the majority wins (answers vary a little from run to run). */
+export const READS = 3;
+
+/**
+ * Combines several reads of the same text: the most common chapter count,
+ * then per chapter the most common title, start page and include flag, and
+ * the most common last page. Ties go to the earlier read.
+ */
+export function consensus(results: TocResult[]): TocResult {
+  const first = results[0];
+  if (!first || results.length === 1) return first ?? { chapters: [], lastPage: null };
+  const count = mostCommon(results.map((r) => r.chapters.length));
+  const same = results.filter((r) => r.chapters.length === count);
+  return {
+    chapters: Array.from({ length: count }, (_, i) => ({
+      title: mostCommon(same.map((r) => r.chapters[i]!.title.trim())),
+      startPage: mostCommon(same.map((r) => r.chapters[i]!.startPage)),
+      include: mostCommon(same.map((r) => r.chapters[i]!.include)),
+    })),
+    lastPage: mostCommon(same.map((r) => r.lastPage)),
+  };
+}
+
+function mostCommon<T>(values: T[]): T {
+  const counts = new Map<T, number>();
+  for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
+  let best = values[0] as T;
+  for (const v of values) if ((counts.get(v) ?? 0) > (counts.get(best) ?? 0)) best = v;
+  return best;
+}
+
+/** Reads the text several times in parallel and returns the majority answer. */
+export async function readTocStable(client: Anthropic, text: string): Promise<TocResult> {
+  const settled = await Promise.allSettled(Array.from({ length: READS }, () => readToc(client, text)));
+  const ok = settled.filter((r): r is PromiseFulfilledResult<TocResult> => r.status === "fulfilled").map((r) => r.value);
+  if (ok.length === 0) throw (settled[0] as PromiseRejectedResult).reason;
+  return consensus(ok);
 }
 
 export async function readToc(client: Anthropic, text: string): Promise<TocResult> {
